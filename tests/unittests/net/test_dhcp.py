@@ -4,7 +4,7 @@ import os
 import signal
 from textwrap import dedent
 
-import httpretty
+import responses
 import pytest
 
 import cloudinit.net as net
@@ -775,13 +775,15 @@ class TestEphemeralDhcpNoNetworkSetup(HttprettyTestCase):
         """No EphemeralDhcp4 network setup when connectivity_url succeeds."""
         url = "http://example.org/index.html"
 
-        httpretty.register_uri(httpretty.GET, url)
-        with net.dhcp.EphemeralDHCPv4(
-            connectivity_url_data={"url": url},
-        ) as lease:
-            self.assertIsNone(lease)
-        # Ensure that no teardown happens:
-        m_dhcp.assert_not_called()
+        with responses.RequestsMock() as r:
+            r.add(responses.GET, url)
+
+            with net.dhcp.EphemeralDHCPv4(
+                connectivity_url_data={"url": url},
+            ) as lease:
+                self.assertIsNone(lease)
+            # Ensure that no teardown happens:
+            m_dhcp.assert_not_called()
 
     @mock.patch("cloudinit.net.dhcp.subp.subp")
     @mock.patch("cloudinit.net.dhcp.maybe_perform_dhcp_discovery")
@@ -798,13 +800,14 @@ class TestEphemeralDhcpNoNetworkSetup(HttprettyTestCase):
         m_dhcp.return_value = [fake_lease]
         m_subp.return_value = ("", "")
 
-        httpretty.register_uri(httpretty.GET, url, body={}, status=404)
-        with net.dhcp.EphemeralDHCPv4(
-            connectivity_url_data={"url": url},
-        ) as lease:
-            self.assertEqual(fake_lease, lease)
-        # Ensure that dhcp discovery occurs
-        m_dhcp.called_once_with()
+        with responses.RequestsMock() as r:
+            r.add(responses.GET, url, status=404)
+            with net.dhcp.EphemeralDHCPv4(
+                connectivity_url_data={"url": url},
+            ) as lease:
+                self.assertEqual(fake_lease, lease)
+            # Ensure that dhcp discovery occurs
+            m_dhcp.called_once_with()
 
 
 @pytest.mark.parametrize(
