@@ -13,12 +13,14 @@ import os
 import pathlib
 import re
 from textwrap import dedent
+from logging import Logger
 
 from cloudinit import gpg
 from cloudinit import log as logging
 from cloudinit import subp, templater, util
 from cloudinit.config.schema import MetaSchema, get_meta_doc
 from cloudinit.settings import PER_INSTANCE
+from cloudinit.cloud import Cloud
 
 LOG = logging.getLogger(__name__)
 
@@ -159,7 +161,7 @@ def get_default_mirrors(arch=None, target=None):
     raise ValueError("No default mirror known for arch %s" % arch)
 
 
-def handle(name, ocfg, cloud, log, _):
+def handle(name: str, ocfg: dict, cloud: Cloud, log: Logger, _):
     """process the config for apt_config. This can be called from
     curthooks if a global apt config was provided or via the "apt"
     standalone command."""

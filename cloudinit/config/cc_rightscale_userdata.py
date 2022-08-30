@@ -13,6 +13,7 @@ from cloudinit import url_helper as uhelp
 from cloudinit import util
 from cloudinit.config.schema import MetaSchema, get_meta_doc
 from cloudinit.distros import ALL_DISTROS
+from cloudinit.cloud import Cloud
 from cloudinit.settings import PER_INSTANCE
 
 MY_NAME = "cc_rightscale_userdata"
@@ -66,7 +67,7 @@ __doc__ = get_meta_doc(meta)
 #
 
 
-def handle(name, _cfg, cloud, log, _args):
+def handle(name, _cfg, cloud: Cloud, log, _args):
     try:
         ud = cloud.get_userdata_raw()
     except Exception:
