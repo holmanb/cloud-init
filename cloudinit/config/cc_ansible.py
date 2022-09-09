@@ -11,6 +11,7 @@ from typing import Optional
 
 from cloudinit.cloud import Cloud
 from cloudinit.config import Config
+from cloudinit.config.cc_write_files import write_files
 from cloudinit.config.schema import MetaSchema, get_meta_doc
 from cloudinit.distros import ALL_DISTROS, Distro
 from cloudinit.settings import PER_INSTANCE
@@ -56,6 +57,27 @@ meta: MetaSchema = {
               pull:
                 url: "https://github.com/holmanb/vmboot.git"
                 playbook-name: ubuntu.yml
+            """
+        ),
+        dedent(
+            """\
+            #cloud-config
+            ansible:
+              package-name: ansible-core
+              install-method: pip
+              controller:
+                files:
+                - path: "/etc/ansible/hosts"
+                  content: |
+                    shapes.example.com
+
+                    [triangular_nodes]
+                    acute.example.com
+                    scalene.example.com
+
+                    [polyhedron_nodes]
+                    trapezohedron.example.com
+                    zonohedron.example.com
             """
         ),
     ],
@@ -142,6 +164,17 @@ def handle(
         validate_config(ansible_cfg)
         install = ansible_cfg["install-method"]
         pull_cfg = ansible_cfg.get("pull")
+        # Modes of Operation (pull vs controller):
+        # ========================================
+        # pull:
+        #
+        # - uses ansible as an agent to pull and run a configuration
+        # against the local node using `ansible-pull`
+        #
+        # controller:
+        #
+        # - convenience wrapper configures instance as an ansible control node
+        #
         if pull_cfg:
             distro: Distro = cloud.distro
             if install == "pip":
@@ -152,17 +185,28 @@ def handle(
             ansible.check_deps()
             run_ansible_pull(ansible, deepcopy(pull_cfg))
 
+        control_cfg = ansible_cfg.get("controller")
+        if control_cfg:
+            setup_ansible_controller(name, control_cfg, cloud)
+
 
 def validate_config(cfg: dict):
     required_keys = {
         "install-method",
         "package-name",
+    }
+    pull_required = {
         "pull/url",
         "pull/playbook-name",
     }
     for key in required_keys:
         if not get_cfg_by_path(cfg, key):
             raise ValueError(f"Invalid value config key: '{key}'")
+
+    if cfg.get("pull"):
+        for key in pull_required:
+            if not get_cfg_by_path(cfg, key):
+                raise ValueError(f"Invalid value config key: '{key}'")
 
     install = cfg["install-method"]
     if install not in ("pip", "distro"):
@@ -196,3 +240,9 @@ def run_ansible_pull(pull: AnsiblePull, cfg: dict):
     )
     if stdout:
         sys.stdout.write(f"{stdout}")
+
+
+def setup_ansible_controller(name: str, cfg: dict, cloud: Cloud):
+    files = cfg.get("files")
+    if files:
+        write_files(name, files, cloud.distro.default_owner)

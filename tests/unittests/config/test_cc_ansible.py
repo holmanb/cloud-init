@@ -71,7 +71,7 @@ CFG_FULL = {
         },
     }
 }
-CFG_MINIMAL = {
+CFG_PULL_MINIMAL = {
     "ansible": {
         "install-method": "pip",
         "package-name": "ansible",
@@ -82,15 +82,45 @@ CFG_MINIMAL = {
     }
 }
 
+CFG_CONTROLLER_MINIMAL = {
+    "ansible": {
+        "install-method": "pip",
+        "package-name": "ansible",
+        "controller": {
+            "files": [
+                {
+                    "path": "/etc/ansible/hosts",
+                    "content": "localhost",
+                }
+            ]
+        },
+    }
+}
+
 
 class TestSchema:
     @mark.parametrize(
         ("config", "error_msg"),
         (
             param(
-                CFG_MINIMAL,
+                CFG_PULL_MINIMAL,
                 None,
-                id="essentials",
+                id="=pull essentials",
+            ),
+            param(
+                CFG_CONTROLLER_MINIMAL,
+                None,
+                id="controller essentials",
+            ),
+            param(
+                {"ansible": {"Controller": {}}},
+                "Additional properties are not allowed ",
+                id="additional-properties",
+            ),
+            param(
+                {"ansible": {"controller": {"Files": {}}}},
+                "Additional properties are not allowed ",
+                id="additional-properties",
             ),
             param(
                 {
@@ -192,7 +222,7 @@ class TestAnsible:
         ("cfg", "exception"),
         (
             (CFG_FULL, None),
-            (CFG_MINIMAL, None),
+            (CFG_PULL_MINIMAL, None),
             (
                 {
                     "ansible": {
@@ -315,7 +345,7 @@ class TestAnsible:
                 ],
             ),
             (
-                CFG_MINIMAL,
+                CFG_PULL_MINIMAL,
                 [
                     "ansible-pull",
                     "--url=https://github/holmanb/vmboot",
@@ -371,3 +401,10 @@ class TestAnsible:
             util.Version(2, 1, 0, -1)
             == cc_ansible.AnsiblePullDistro(distro).get_version()
         )
+
+    @mock.patch(M_PATH + "write_files")
+    def test_controller_file_install(self, m_write):
+        cc_ansible.handle(
+            "", CFG_CONTROLLER_MINIMAL, get_cloud(), mock.Mock(), []
+        )
+        m_write.assert_called_once()

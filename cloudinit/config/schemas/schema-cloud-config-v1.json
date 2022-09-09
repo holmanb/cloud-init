@@ -1,6 +1,52 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "$defs": {
+    "write_files.write_files": {
+		"type": "array",
+		"minItems": 1,
+		"items": {
+			"type": "object",
+			"required": ["path"],
+			"additionalProperties": false,
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Path of the file to which ``content`` is decoded and written"
+				},
+				"content": {
+					"type": "string",
+					"default": "''",
+					"description": "Optional content to write to the provided ``path``. When content is present and encoding is not 'text/plain', decode the content prior to writing. Default: ``''``"
+				},
+				"owner": {
+					"type": "string",
+					"default": "root:root",
+					"description": "Optional owner:group to chown on the file. Default: ``root:root``"
+				},
+				"permissions": {
+					"type": "string",
+					"default": "'0o644'",
+					"description": "Optional file permissions to set on ``path`` represented as an octal string '0###'. Default: ``0o644``"
+				},
+				"encoding": {
+					"type": "string",
+					"default": "text/plain",
+					"enum": ["gz", "gzip", "gz+base64", "gzip+base64", "gz+b64", "gzip+b64", "b64", "base64", "text/plain"],
+					"description": "Optional encoding type of the content. Default is ``text/plain`` and no content decoding is performed. Supported encoding types are: gz, gzip, gz+base64, gzip+base64, gz+b64, gzip+b64, b64, base64"
+				},
+				"append": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to append ``content`` to existing file if ``path`` exists. Default: ``false``."
+				},
+				"defer": {
+					"type": "boolean",
+					"default": false,
+					"description": "Defer writing the file until 'final' stage, after users were created, and packages were installed. Default: ``false``."
+				}
+			}
+		}
+	},
     "users_groups.groups_by_groupname": {
       "additionalProperties": false,
       "patternProperties": {
@@ -266,6 +312,15 @@
             "package-name": {
               "type": "string",
               "default": "ansible"
+            },
+            "controller": {
+                "additionalProperties": false,
+				"properties": {
+					"files": {
+						"type": "array",
+						"$ref": "#/$defs/write_files.write_files"
+					}
+				}
             },
             "pull": {
               "required": ["url", "playbook-name"],
@@ -2396,56 +2451,13 @@
       }
     },
     "cc_write_files": {
-      "type": "object",
-      "properties": {
-        "write_files": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["path"],
-            "additionalProperties": false,
-            "properties": {
-              "path": {
-                "type": "string",
-                "description": "Path of the file to which ``content`` is decoded and written"
-              },
-              "content": {
-                "type": "string",
-                "default": "''",
-                "description": "Optional content to write to the provided ``path``. When content is present and encoding is not 'text/plain', decode the content prior to writing. Default: ``''``"
-              },
-              "owner": {
-                "type": "string",
-                "default": "root:root",
-                "description": "Optional owner:group to chown on the file. Default: ``root:root``"
-              },
-              "permissions": {
-                "type": "string",
-                "default": "'0o644'",
-                "description": "Optional file permissions to set on ``path`` represented as an octal string '0###'. Default: ``0o644``"
-              },
-              "encoding": {
-                "type": "string",
-                "default": "text/plain",
-                "enum": ["gz", "gzip", "gz+base64", "gzip+base64", "gz+b64", "gzip+b64", "b64", "base64", "text/plain"],
-                "description": "Optional encoding type of the content. Default is ``text/plain`` and no content decoding is performed. Supported encoding types are: gz, gzip, gz+base64, gzip+base64, gz+b64, gzip+b64, b64, base64"
-              },
-              "append": {
-                "type": "boolean",
-                "default": false,
-                "description": "Whether to append ``content`` to existing file if ``path`` exists. Default: ``false``."
-              },
-              "defer": {
-                "type": "boolean",
-                "default": false,
-                "description": "Defer writing the file until 'final' stage, after users were created, and packages were installed. Default: ``false``."
-              }
-            }
-          },
-          "minItems": 1
-        }
-      }
-    },
+		"type": "object",
+		"properties": {
+			"write_files": {
+				"$ref": "#/$defs/write_files.write_files"
+			}
+		}
+	},
     "cc_yum_add_repo": {
       "type": "object",
       "properties": {
