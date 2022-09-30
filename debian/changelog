@@ -1,8 +1,16 @@
-cloud-init (22.3-13-g70ce6442-0ubuntu1~22.10.2) UNRELEASED; urgency=medium
+cloud-init (22.3.4-0ubuntu1) UNRELEASED; urgency=medium
 
   * d/control: drop python3-httpretty from Build-Depends
+  * New upstream bugfix release.
+    + Release 22.3.4
+    + Fix Oracle DS primary interface when using IMDS (#1757) (LP: #1989686)
+    + Fix Oracle DS not setting subnet when using IMDS (#1735)
+      (LP: #1989686)
+    + azure: define new attribute for pre-22.3 pickles (#1725)
+    + sources/azure: ensure instance id is always correct (#1727)
+      [Chris Patterson]
 
- -- Alberto Contreras <alberto.contreras@canonical.com>  Mon, 26 Sep 2022 17:32:23 +0200
+ -- Brett Holman <brett.holman@canonical.com>  Fri, 30 Sep 2022 15:09:17 -0600
 
 cloud-init (22.3-13-g70ce6442-0ubuntu1~22.10.1) kinetic; urgency=medium
 
