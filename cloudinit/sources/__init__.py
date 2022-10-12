@@ -301,6 +301,9 @@ class DataSource(CloudInitPickleMixin, metaclass=abc.ABCMeta):
     def __str__(self):
         return type_utils.obj_name(self)
 
+    def poll_to_rerun(self):
+        raise NotImplementedError("Not implemented for this datasource")
+
     def _get_standardized_metadata(self, instance_data):
         """Return a dictionary of standardized metadata keys."""
         local_hostname = self.get_hostname().hostname

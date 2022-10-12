@@ -12,6 +12,7 @@ stages to boot:
 3. Network
 4. Config
 5. Final
+6. Poll (optional)
 
 Generator
 =========
@@ -156,6 +157,23 @@ For scripts external to cloud-init looking to wait until cloud-init is
 finished, the ``cloud-init status --wait`` subcommand can help block external
 scripts until cloud-init is done without having to write your own systemd
 units dependency chains. See :ref:`cli_status` for more info.
+
+Poll
+====
+
++------------------+----------------------------------------------------------+
+| systemd service  | ``cloud-poll.service``                                   |
++---------+--------+----------------------------------------------------------+
+| runs             | only if enabled                                          |
++---------+--------+----------------------------------------------------------+
+| blocks           | nothing                                                  |
++---------+--------+----------------------------------------------------------+
+
+The poll daemon only runs if enabled. This stage runs after cloud-final and
+does not block other stages. This service monitors the machine-id and re-runs
+cloud-init in the event of a change. This stage is opt-in, and therefore does
+not change existing ``cloud-init status`` output. ``cloud-init status --wait``
+does not block when the poll daemon is running.
 
 First Boot Determination
 ========================

@@ -38,6 +38,7 @@ from cloudinit import url_helper
 from cloudinit import util
 from cloudinit import version
 from cloudinit import warnings
+from cloudinit.subp import subp
 
 from cloudinit import reporting
 from cloudinit.reporting import events
@@ -561,6 +562,56 @@ def di_report_warn(datasource, cfg):
     )
 
 
+def main_poll(action_name, args):
+    """If machine-id changes, reconfigure instance with cloud-init
+
+    Initialize Init and Module objects to use a configured logger then poll.
+    """
+    name = "poll"
+
+    w_msg = welcome_format("%s:%s" % (action_name, name))
+    init = stages.Init(ds_deps=[], reporter=args.reporter)
+    init.read_cfg(extract_fns(args))
+    try:
+        init.fetch(existing="trust")
+    except sources.DataSourceNotFoundException:
+        # There was no datasource found, there is nothing to do
+        msg = (
+            "Can not apply stage %s, no datasource found! Likely bad "
+            "things to come!" % name
+        )
+        util.logexc(LOG, msg)
+        print_exc(msg)
+        return [(msg)]
+    mods = Modules(init, extract_fns(args), reporter=args.reporter)
+
+    logging.setupLogging(mods.cfg)
+    apply_reporting_cfg(init.cfg)
+
+    ocfg = util.get_cfg_by_path(init._cfg, ("long_poll",), {}) or {}
+    interval = ocfg.get("interval")
+    enabled = ocfg.get("enabled")
+
+    if not enabled:
+        LOG.info("Poll daemon not configured, exiting")
+    elif not interval:
+        LOG.warning("No poll interval configured, aborting poll daemon")
+    elif not init.datasource:
+        LOG.warning("Datasource not initialized, aborting")
+    else:
+        # get initial machine-id
+        welcome(name, msg=w_msg)
+
+        # poll
+        while True:
+            LOG.info("Starting poll")
+            if init.datasource.poll_to_rerun():
+                LOG.info("Rebooting")
+                # rerun cloud-init with new config
+                subp(["cloud-init", "clean", "--reboot"])
+    return []
+
+
 def main_modules(action_name, args):
     name = args.mode
     # Cloud-init 'modules' stages are broken up into the following sub-stages
@@ -715,6 +766,8 @@ def status_wrapper(name, args, data_d=None, link_d=None):
             mode = "init"
     elif name == "modules":
         mode = "modules-%s" % args.mode
+    elif name == "poll":
+        mode = "poll"
     else:
         raise ValueError("unknown name: %s" % name)
 
@@ -724,6 +777,7 @@ def status_wrapper(name, args, data_d=None, link_d=None):
         "modules-init",
         "modules-config",
         "modules-final",
+        "poll",
     )
     if mode not in modes:
         raise ValueError(
@@ -881,6 +935,11 @@ def main(sysv_args=None):
     subparsers.required = True
 
     # Each action and its sub-options (if any)
+    parser_poll = subparsers.add_parser(
+        "poll", help="[experimental] poll object."
+    )
+    parser_poll.set_defaults(action=("poll", main_poll))
+
     parser_init = subparsers.add_parser(
         "init", help="Initialize cloud-init and perform initial modules."
     )
@@ -1049,7 +1108,7 @@ def main(sysv_args=None):
     # Setup signal handlers before running
     signal_handler.attach_handlers()
 
-    if name in ("modules", "init"):
+    if name in ("modules", "init", "poll"):
         functor = status_wrapper
 
     rname = None

@@ -13,8 +13,12 @@ import os
 import socket
 import stat
 from enum import Flag, auto
+import json
 from json.decoder import JSONDecodeError
 from typing import Any, Dict, Union, cast
+
+import aiohttp
+import asyncio
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -31,6 +35,7 @@ LOG = logging.getLogger(__name__)
 LXD_SOCKET_PATH = "/dev/lxd/sock"
 LXD_SOCKET_API_VERSION = "1.0"
 LXD_URL = "http://lxd"
+LXD_EVENTS = "http://x/1.0/events"
 
 # Config key mappings to alias as top-level instance data keys
 CONFIG_KEY_ALIASES = {
@@ -41,6 +46,25 @@ CONFIG_KEY_ALIASES = {
     "user.network-config": "network-config",
     "user.vendor-data": "vendor-data",
 }
+
+
+async def event_occurred():
+    """Return true when websocket event occurs
+
+    https://linuxcontainers.org/lxd/docs/master/dev-lxd/#events
+    """
+    connector = aiohttp.UnixConnector(LXD_SOCKET_PATH)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.ws_connect(LXD_EVENTS) as ws:
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json.loads(msg.data)
+                    t = data.get("type")
+                    if t in ("config", "device"):
+                        await ws.close()
+                        return True
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    break
 
 
 def generate_fallback_network_config() -> dict:
@@ -145,6 +169,13 @@ class DataSourceLXD(sources.DataSource):
         "user.vendor-data",
         "user.user-data",
     )
+
+    def poll_to_rerun(self):
+        """Return true when a rerun event occurs
+
+        for lxd this happens when there is a changed config or device
+        """
+        return asyncio.run(event_occurred())
 
     def _is_platform_viable(self) -> bool:
         """Check platform environment to report if this datasource may run."""

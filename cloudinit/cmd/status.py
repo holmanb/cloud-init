@@ -30,6 +30,7 @@ class UXAppStatus(enum.Enum):
 
     NOT_RUN = "not run"
     RUNNING = "running"
+    POLLING = "polling"
     DONE = "done"
     ERROR = "error"
     DISABLED = "disabled"
@@ -224,7 +225,10 @@ def get_status_details(paths=None) -> StatusDetails:
     latest_event = 0
     for key, value in sorted(status_v1.items()):
         if key == "stage":
-            if value:
+            if value == "poll":
+                status = UXAppStatus.DONE
+                description = "Cloud-init stages done, poll daemon running"
+            elif value:
                 status = UXAppStatus.RUNNING
                 description = "Running in stage: {0}".format(value)
         elif key == "datasource":

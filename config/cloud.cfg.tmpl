@@ -195,6 +195,12 @@ cloud_final_modules:
  - final-message
  - power-state-change
 
+
+# Poll daemon (disabled by default) reruns cloud-init when machine-id changes
+long_poll:
+  enabled: false
+  interval: 300
+
 # System and/or distro specific settings
 # (not accessible to handlers/transforms)
 system_info:

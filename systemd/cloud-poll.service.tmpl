@@ -1,0 +1,21 @@
+## template:jinja
+[Unit]
+Description=Execute cloud poll daemon
+After=network-online.target cloud-final.service rc-local.service
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloud-init poll
+RemainAfterExit=yes
+TimeoutSec=0
+KillMode=process
+TasksMax=infinity
+
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target

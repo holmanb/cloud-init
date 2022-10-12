@@ -26,6 +26,9 @@ status.json's format is:
      'modules-final': {
        'errors': [], 'start': <float>, 'end' <float> # (same as 'init' above)
      },
+     'poll': {
+       'errors': [], 'start': <float>, 'end' <float> # (same as 'init' above)
+     },
      'datasource': string describing datasource found or None
      'stage': string representing stage that is currently running
               ('init', 'init-local', 'modules-final', 'modules-config', None)
