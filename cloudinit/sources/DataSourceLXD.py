@@ -57,10 +57,15 @@ def event_occurred_streaming():
 
         # Use whatever chunk_size is sent by the server
         for msg in response.iter_content(chunk_size=None):
+            LOG.info("message received %s" % msg)
             data = json.loads(msg.text)
+            LOG.info("message received %s" % data)
             t = data.get("type")
+            LOG.info("message received %s" % t)
             if t in ("config", "device"):
+                LOG.info("true")
                 return True
+            LOG.info("false")
 
 
 async def event_occurred_aiohttp():
