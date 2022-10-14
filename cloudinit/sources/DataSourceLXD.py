@@ -35,7 +35,8 @@ LOG = logging.getLogger(__name__)
 LXD_SOCKET_PATH = "/dev/lxd/sock"
 LXD_SOCKET_API_VERSION = "1.0"
 LXD_URL = "http://lxd"
-LXD_EVENTS = "http://x/1.0/events"
+LXD_X = "http://x"
+LXD_EVENTS = f"{LXD_X}/1.0/events"
 
 # Config key mappings to alias as top-level instance data keys
 CONFIG_KEY_ALIASES = {
@@ -50,6 +51,7 @@ CONFIG_KEY_ALIASES = {
 
 def event_occurred_streaming():
     with requests.Session() as session:
+        session.mount(LXD_X, LXDSocketAdapter())
         response = _do_request(
             session, LXD_EVENTS, do_raise=False, stream=True)
 
