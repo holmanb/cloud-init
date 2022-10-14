@@ -49,6 +49,20 @@ CONFIG_KEY_ALIASES = {
 }
 
 
+def _do_stream_request(
+        session: requests.Session, url: str, do_raise: bool = True
+) -> requests.Request:
+    with session.get(url, stream=True) as resp:
+        if not resp.encoding:
+            resp.encoding = 'utf-8'
+        LOG.debug("[GET] [HTTP-stream:%d] %s Open", resp.status_code, url)
+        lines = "\n".join(resp.iter_lines())
+            import pdb; pdb.set_trace()
+
+        return lines
+
+    LOG.debug("[GET] [HTTP-stream:%d] %s Closed", resp.status_code, url)
+
 def event_occurred_streaming():
     with requests.Session() as session:
         session.mount(
@@ -59,7 +73,10 @@ def event_occurred_streaming():
             session, LXD_EVENTS, do_raise=False, stream=True)
 
         # Use whatever chunk_size is sent by the server
-        for msg in response.iter_content(chunk_size=None):
+        from remote_pdb import RemotePdb
+        for msg in response.iter_lines():
+            RemotePdb('127.0.0.1', 8080).set_trace()
+
             LOG.info("message received %s" % msg)
             data = json.loads(msg.text)
             LOG.info("message received %s" % data)
