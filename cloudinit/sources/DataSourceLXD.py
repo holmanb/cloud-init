@@ -48,7 +48,20 @@ CONFIG_KEY_ALIASES = {
 }
 
 
-async def event_occurred():
+def event_occurred_streaming():
+    with requests.Session() as session:
+        response = _do_request(
+            session, LXD_EVENTS, do_raise=False, stream=True)
+
+        # Use whatever chunk_size is sent by the server
+        for msg in response.iter_content(chunk_size=None):
+            data = json.loads(msg.text)
+            t = data.get("type")
+            if t in ("config", "device"):
+                return True
+
+
+async def event_occurred_aiohttp():
     """Return true when websocket event occurs
 
     https://linuxcontainers.org/lxd/docs/master/dev-lxd/#events
@@ -175,7 +188,10 @@ class DataSourceLXD(sources.DataSource):
 
         for lxd this happens when there is a changed config or device
         """
-        return asyncio.run(event_occurred())
+        if True:
+            return asyncio.run(event_occurred_aiohttp())
+        else:
+            return event_occurred_streaming()
 
     def _is_platform_viable(self) -> bool:
         """Check platform environment to report if this datasource may run."""
@@ -272,9 +288,9 @@ def _get_json_response(
 
 
 def _do_request(
-    session: requests.Session, url: str, do_raise: bool = True
+    session: requests.Session, url: str, do_raise: bool = True, stream=False
 ) -> requests.Response:
-    response = session.get(url)
+    response = session.get(url, stream=stream)
     LOG.debug("[GET] [HTTP:%d] %s", response.status_code, url)
     if do_raise and not response.ok:
         raise sources.InvalidMetaDataException(

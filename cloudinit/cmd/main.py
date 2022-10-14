@@ -608,6 +608,15 @@ def main_poll(action_name, args):
             if init.datasource.poll_to_rerun():
                 LOG.info("Rebooting")
                 # rerun cloud-init with new config
+                #
+                # TODO: what is a better entry point here?
+                #
+                # we need to agree upon a desired behavior
+                # presumably, cloud-init clean --reboot is
+                # not the final expected behavior, but until
+                # agreed upon behavior is defined, this serves as
+                # a behavior that can be used for evaluating this
+                # behavior
                 subp(["cloud-init", "clean", "--reboot"])
     return []
 
