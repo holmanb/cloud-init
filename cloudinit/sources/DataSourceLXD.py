@@ -188,7 +188,7 @@ class DataSourceLXD(sources.DataSource):
 
         for lxd this happens when there is a changed config or device
         """
-        if True:
+        if False:
             return asyncio.run(event_occurred_aiohttp())
         else:
             return event_occurred_streaming()
