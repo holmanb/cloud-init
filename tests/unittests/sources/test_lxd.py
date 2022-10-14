@@ -236,321 +236,321 @@ class TestIsPlatformViable:
             assert 0 == m_lstat.call_count
 
 
-class TestReadMetadata:
-    @pytest.mark.parametrize(
-        "get_devices,url_responses,expected,logs",
-        (
-            (  # Assert non-JSON format from config route
-                False,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": "[NOT_JSON",
-                },
-                InvalidMetaDataException(
-                    "Unable to process LXD config at"
-                    " http://lxd/1.0/config. Expected JSON but found:"
-                    " [NOT_JSON"
-                ),
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                ],
-            ),
-            (  # Assert success on just meta-data
-                False,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": "[]",
-                },
-                {
-                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
-                    "config": {},
-                    "meta-data": "local-hostname: md\n",
-                },
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                ],
-            ),
-            (  # Assert success on devices
-                True,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": "[]",
-                    "http://lxd/1.0/devices": (
-                        '{"root": {"path": "/", "pool": "default",'
-                        ' "type": "disk"}}'
-                    ),
-                },
-                {
-                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
-                    "config": {},
-                    "meta-data": "local-hostname: md\n",
-                    "devices": {
-                        "root": {
-                            "path": "/",
-                            "pool": "default",
-                            "type": "disk",
-                        }
-                    },
-                },
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                ],
-            ),
-            (  # Assert 404 on devices
-                True,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": "[]",
-                },
-                InvalidMetaDataException(
-                    "Invalid HTTP response [404] from http://lxd/1.0/devices"
-                ),
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                ],
-            ),
-            (  # Assert non-JSON format from devices
-                True,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": "[]",
-                    "http://lxd/1.0/devices": '{"root"',
-                },
-                InvalidMetaDataException(
-                    "Unable to process LXD config at"
-                    ' http://lxd/1.0/devices. Expected JSON but found: {"root"'
-                ),
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                ],
-            ),
-            (  # Assert 404s for config routes log skipping
-                False,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": (
-                        '["/1.0/config/user.custom1",'
-                        ' "/1.0/config/user.meta-data",'
-                        ' "/1.0/config/user.network-config",'
-                        ' "/1.0/config/user.user-data",'
-                        ' "/1.0/config/user.vendor-data"]'
-                    ),
-                    "http://lxd/1.0/config/user.custom1": "custom1",
-                    "http://lxd/1.0/config/user.meta-data": "",  # 404
-                    "http://lxd/1.0/config/user.network-config": "net-config",
-                    "http://lxd/1.0/config/user.user-data": "",  # 404
-                    "http://lxd/1.0/config/user.vendor-data": "",  # 404
-                },
-                {
-                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
-                    "config": {
-                        "user.custom1": "custom1",  # Not promoted
-                        "user.network-config": "net-config",
-                    },
-                    "meta-data": "local-hostname: md\n",
-                    "network-config": "net-config",
-                },
-                [
-                    "Skipping http://lxd/1.0/config/user.vendor-data on"
-                    " [HTTP:404]",
-                    "Skipping http://lxd/1.0/config/user.meta-data on"
-                    " [HTTP:404]",
-                    "Skipping http://lxd/1.0/config/user.user-data on"
-                    " [HTTP:404]",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.custom1",
-                    "[GET] [HTTP:200]"
-                    " http://lxd/1.0/config/user.network-config",
-                ],
-            ),
-            (  # Assert all CONFIG_KEY_ALIASES promoted to top-level keys
-                False,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": (
-                        '["/1.0/config/user.custom1",'
-                        ' "/1.0/config/user.meta-data",'
-                        ' "/1.0/config/user.network-config",'
-                        ' "/1.0/config/user.user-data",'
-                        ' "/1.0/config/user.vendor-data"]'
-                    ),
-                    "http://lxd/1.0/config/user.custom1": "custom1",
-                    "http://lxd/1.0/config/user.meta-data": "meta-data",
-                    "http://lxd/1.0/config/user.network-config": "net-config",
-                    "http://lxd/1.0/config/user.user-data": "user-data",
-                    "http://lxd/1.0/config/user.vendor-data": "vendor-data",
-                },
-                {
-                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
-                    "config": {
-                        "user.custom1": "custom1",  # Not promoted
-                        "user.meta-data": "meta-data",
-                        "user.network-config": "net-config",
-                        "user.user-data": "user-data",
-                        "user.vendor-data": "vendor-data",
-                    },
-                    "meta-data": "local-hostname: md\n",
-                    "network-config": "net-config",
-                    "user-data": "user-data",
-                    "vendor-data": "vendor-data",
-                },
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.custom1",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.meta-data",
-                    "[GET] [HTTP:200]"
-                    " http://lxd/1.0/config/user.network-config",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.user-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.vendor-data",
-                ],
-            ),
-            (  # Assert cloud-init.* config key values preferred over user.*
-                False,
-                {
-                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
-                    "http://lxd/1.0/config": (
-                        '["/1.0/config/user.meta-data",'
-                        ' "/1.0/config/user.network-config",'
-                        ' "/1.0/config/user.user-data",'
-                        ' "/1.0/config/user.vendor-data",'
-                        ' "/1.0/config/cloud-init.network-config",'
-                        ' "/1.0/config/cloud-init.user-data",'
-                        ' "/1.0/config/cloud-init.vendor-data"]'
-                    ),
-                    "http://lxd/1.0/config/user.meta-data": "user.meta-data",
-                    "http://lxd/1.0/config/user.network-config": (
-                        "user.network-config"
-                    ),
-                    "http://lxd/1.0/config/user.user-data": "user.user-data",
-                    "http://lxd/1.0/config/user.vendor-data": (
-                        "user.vendor-data"
-                    ),
-                    "http://lxd/1.0/config/cloud-init.meta-data": (
-                        "cloud-init.meta-data"
-                    ),
-                    "http://lxd/1.0/config/cloud-init.network-config": (
-                        "cloud-init.network-config"
-                    ),
-                    "http://lxd/1.0/config/cloud-init.user-data": (
-                        "cloud-init.user-data"
-                    ),
-                    "http://lxd/1.0/config/cloud-init.vendor-data": (
-                        "cloud-init.vendor-data"
-                    ),
-                },
-                {
-                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
-                    "config": {
-                        "user.meta-data": "user.meta-data",
-                        "user.network-config": "user.network-config",
-                        "user.user-data": "user.user-data",
-                        "user.vendor-data": "user.vendor-data",
-                        "cloud-init.network-config": (
-                            "cloud-init.network-config"
-                        ),
-                        "cloud-init.user-data": "cloud-init.user-data",
-                        "cloud-init.vendor-data": "cloud-init.vendor-data",
-                    },
-                    "meta-data": "local-hostname: md\n",
-                    "network-config": "cloud-init.network-config",
-                    "user-data": "cloud-init.user-data",
-                    "vendor-data": "cloud-init.vendor-data",
-                },
-                [
-                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.meta-data",
-                    "[GET] [HTTP:200]"
-                    " http://lxd/1.0/config/user.network-config",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.user-data",
-                    "[GET] [HTTP:200] http://lxd/1.0/config/user.vendor-data",
-                    "[GET] [HTTP:200]"
-                    " http://lxd/1.0/config/cloud-init.network-config",
-                    "[GET] [HTTP:200]"
-                    " http://lxd/1.0/config/cloud-init.user-data",
-                    "[GET] [HTTP:200]"
-                    " http://lxd/1.0/config/cloud-init.vendor-data",
-                    "Ignoring LXD config user.user-data in favor of"
-                    " cloud-init.user-data value.",
-                    "Ignoring LXD config user.network-config in favor of"
-                    " cloud-init.network-config value.",
-                    "Ignoring LXD config user.vendor-data in favor of"
-                    " cloud-init.vendor-data value.",
-                ],
-            ),
-        ),
-    )
-    @mock.patch.object(lxd.requests.Session, "get")
-    def test_read_metadata_handles_unexpected_content_or_http_status(
-        self, m_session_get, get_devices, url_responses, expected, logs, caplog
-    ):
-        """read_metadata handles valid and invalid content and status codes."""
-
-        def fake_get(url):
-            """Mock Response json, ok, status_code, text from url_responses."""
-            m_resp = mock.MagicMock()
-            content = url_responses.get(url, "")
-            m_resp.json.side_effect = lambda: json.loads(content)
-            if content:
-                mock_ok = mock.PropertyMock(return_value=True)
-                mock_status_code = mock.PropertyMock(return_value=200)
-            else:
-                mock_ok = mock.PropertyMock(return_value=False)
-                mock_status_code = mock.PropertyMock(return_value=404)
-            type(m_resp).ok = mock_ok
-            type(m_resp).status_code = mock_status_code
-            mock_text = mock.PropertyMock(return_value=content)
-            type(m_resp).text = mock_text
-            return m_resp
-
-        m_session_get.side_effect = fake_get
-        metadata_keys = MetaDataKeys.META_DATA | MetaDataKeys.CONFIG
-        if get_devices:
-            metadata_keys |= MetaDataKeys.DEVICES
-        if isinstance(expected, Exception):
-            with pytest.raises(type(expected), match=re.escape(str(expected))):
-                lxd.read_metadata(metadata_keys=metadata_keys)
-        else:
-            assert expected == lxd.read_metadata(metadata_keys=metadata_keys)
-        for log in logs:
-            assert log in caplog.text
-
-    @pytest.mark.parametrize(
-        "metadata_keys, expected_get_urls",
-        [
-            (MetaDataKeys.NONE, []),
-            (MetaDataKeys.META_DATA, ["http://lxd/1.0/meta-data"]),
-            (MetaDataKeys.CONFIG, ["http://lxd/1.0/config"]),
-            (MetaDataKeys.DEVICES, ["http://lxd/1.0/devices"]),
-            (
-                MetaDataKeys.DEVICES | MetaDataKeys.CONFIG,
-                ["http://lxd/1.0/config", "http://lxd/1.0/devices"],
-            ),
-            (
-                MetaDataKeys.ALL,
-                [
-                    "http://lxd/1.0/meta-data",
-                    "http://lxd/1.0/config",
-                    "http://lxd/1.0/devices",
-                ],
-            ),
-        ],
-    )
-    @mock.patch.object(lxd.requests.Session, "get")
-    def test_read_metadata_keys(
-        self, m_session_get, metadata_keys, expected_get_urls
-    ):
-        lxd.read_metadata(metadata_keys=metadata_keys)
-        assert (
-            list(map(mock.call, expected_get_urls))
-            == m_session_get.call_args_list
-        )
-
-
-# vi: ts=4 expandtab
+#class TestReadMetadata:
+#    @pytest.mark.parametrize(
+#        "get_devices,url_responses,expected,logs",
+#        (
+#            (  # Assert non-JSON format from config route
+#                False,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": "[NOT_JSON",
+#                },
+#                InvalidMetaDataException(
+#                    "Unable to process LXD config at"
+#                    " http://lxd/1.0/config. Expected JSON but found:"
+#                    " [NOT_JSON"
+#                ),
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                ],
+#            ),
+#            (  # Assert success on just meta-data
+#                False,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": "[]",
+#                },
+#                {
+#                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
+#                    "config": {},
+#                    "meta-data": "local-hostname: md\n",
+#                },
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                ],
+#            ),
+#            (  # Assert success on devices
+#                True,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": "[]",
+#                    "http://lxd/1.0/devices": (
+#                        '{"root": {"path": "/", "pool": "default",'
+#                        ' "type": "disk"}}'
+#                    ),
+#                },
+#                {
+#                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
+#                    "config": {},
+#                    "meta-data": "local-hostname: md\n",
+#                    "devices": {
+#                        "root": {
+#                            "path": "/",
+#                            "pool": "default",
+#                            "type": "disk",
+#                        }
+#                    },
+#                },
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                ],
+#            ),
+#            (  # Assert 404 on devices
+#                True,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": "[]",
+#                },
+#                InvalidMetaDataException(
+#                    "Invalid HTTP response [404] from http://lxd/1.0/devices"
+#                ),
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                ],
+#            ),
+#            (  # Assert non-JSON format from devices
+#                True,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": "[]",
+#                    "http://lxd/1.0/devices": '{"root"',
+#                },
+#                InvalidMetaDataException(
+#                    "Unable to process LXD config at"
+#                    ' http://lxd/1.0/devices. Expected JSON but found: {"root"'
+#                ),
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                ],
+#            ),
+#            (  # Assert 404s for config routes log skipping
+#                False,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": (
+#                        '["/1.0/config/user.custom1",'
+#                        ' "/1.0/config/user.meta-data",'
+#                        ' "/1.0/config/user.network-config",'
+#                        ' "/1.0/config/user.user-data",'
+#                        ' "/1.0/config/user.vendor-data"]'
+#                    ),
+#                    "http://lxd/1.0/config/user.custom1": "custom1",
+#                    "http://lxd/1.0/config/user.meta-data": "",  # 404
+#                    "http://lxd/1.0/config/user.network-config": "net-config",
+#                    "http://lxd/1.0/config/user.user-data": "",  # 404
+#                    "http://lxd/1.0/config/user.vendor-data": "",  # 404
+#                },
+#                {
+#                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
+#                    "config": {
+#                        "user.custom1": "custom1",  # Not promoted
+#                        "user.network-config": "net-config",
+#                    },
+#                    "meta-data": "local-hostname: md\n",
+#                    "network-config": "net-config",
+#                },
+#                [
+#                    "Skipping http://lxd/1.0/config/user.vendor-data on"
+#                    " [HTTP:404]",
+#                    "Skipping http://lxd/1.0/config/user.meta-data on"
+#                    " [HTTP:404]",
+#                    "Skipping http://lxd/1.0/config/user.user-data on"
+#                    " [HTTP:404]",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.custom1",
+#                    "[GET] [HTTP:200]"
+#                    " http://lxd/1.0/config/user.network-config",
+#                ],
+#            ),
+#            (  # Assert all CONFIG_KEY_ALIASES promoted to top-level keys
+#                False,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": (
+#                        '["/1.0/config/user.custom1",'
+#                        ' "/1.0/config/user.meta-data",'
+#                        ' "/1.0/config/user.network-config",'
+#                        ' "/1.0/config/user.user-data",'
+#                        ' "/1.0/config/user.vendor-data"]'
+#                    ),
+#                    "http://lxd/1.0/config/user.custom1": "custom1",
+#                    "http://lxd/1.0/config/user.meta-data": "meta-data",
+#                    "http://lxd/1.0/config/user.network-config": "net-config",
+#                    "http://lxd/1.0/config/user.user-data": "user-data",
+#                    "http://lxd/1.0/config/user.vendor-data": "vendor-data",
+#                },
+#                {
+#                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
+#                    "config": {
+#                        "user.custom1": "custom1",  # Not promoted
+#                        "user.meta-data": "meta-data",
+#                        "user.network-config": "net-config",
+#                        "user.user-data": "user-data",
+#                        "user.vendor-data": "vendor-data",
+#                    },
+#                    "meta-data": "local-hostname: md\n",
+#                    "network-config": "net-config",
+#                    "user-data": "user-data",
+#                    "vendor-data": "vendor-data",
+#                },
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.custom1",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.meta-data",
+#                    "[GET] [HTTP:200]"
+#                    " http://lxd/1.0/config/user.network-config",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.user-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.vendor-data",
+#                ],
+#            ),
+#            (  # Assert cloud-init.* config key values preferred over user.*
+#                False,
+#                {
+#                    "http://lxd/1.0/meta-data": "local-hostname: md\n",
+#                    "http://lxd/1.0/config": (
+#                        '["/1.0/config/user.meta-data",'
+#                        ' "/1.0/config/user.network-config",'
+#                        ' "/1.0/config/user.user-data",'
+#                        ' "/1.0/config/user.vendor-data",'
+#                        ' "/1.0/config/cloud-init.network-config",'
+#                        ' "/1.0/config/cloud-init.user-data",'
+#                        ' "/1.0/config/cloud-init.vendor-data"]'
+#                    ),
+#                    "http://lxd/1.0/config/user.meta-data": "user.meta-data",
+#                    "http://lxd/1.0/config/user.network-config": (
+#                        "user.network-config"
+#                    ),
+#                    "http://lxd/1.0/config/user.user-data": "user.user-data",
+#                    "http://lxd/1.0/config/user.vendor-data": (
+#                        "user.vendor-data"
+#                    ),
+#                    "http://lxd/1.0/config/cloud-init.meta-data": (
+#                        "cloud-init.meta-data"
+#                    ),
+#                    "http://lxd/1.0/config/cloud-init.network-config": (
+#                        "cloud-init.network-config"
+#                    ),
+#                    "http://lxd/1.0/config/cloud-init.user-data": (
+#                        "cloud-init.user-data"
+#                    ),
+#                    "http://lxd/1.0/config/cloud-init.vendor-data": (
+#                        "cloud-init.vendor-data"
+#                    ),
+#                },
+#                {
+#                    "_metadata_api_version": lxd.LXD_SOCKET_API_VERSION,
+#                    "config": {
+#                        "user.meta-data": "user.meta-data",
+#                        "user.network-config": "user.network-config",
+#                        "user.user-data": "user.user-data",
+#                        "user.vendor-data": "user.vendor-data",
+#                        "cloud-init.network-config": (
+#                            "cloud-init.network-config"
+#                        ),
+#                        "cloud-init.user-data": "cloud-init.user-data",
+#                        "cloud-init.vendor-data": "cloud-init.vendor-data",
+#                    },
+#                    "meta-data": "local-hostname: md\n",
+#                    "network-config": "cloud-init.network-config",
+#                    "user-data": "cloud-init.user-data",
+#                    "vendor-data": "cloud-init.vendor-data",
+#                },
+#                [
+#                    "[GET] [HTTP:200] http://lxd/1.0/meta-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.meta-data",
+#                    "[GET] [HTTP:200]"
+#                    " http://lxd/1.0/config/user.network-config",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.user-data",
+#                    "[GET] [HTTP:200] http://lxd/1.0/config/user.vendor-data",
+#                    "[GET] [HTTP:200]"
+#                    " http://lxd/1.0/config/cloud-init.network-config",
+#                    "[GET] [HTTP:200]"
+#                    " http://lxd/1.0/config/cloud-init.user-data",
+#                    "[GET] [HTTP:200]"
+#                    " http://lxd/1.0/config/cloud-init.vendor-data",
+#                    "Ignoring LXD config user.user-data in favor of"
+#                    " cloud-init.user-data value.",
+#                    "Ignoring LXD config user.network-config in favor of"
+#                    " cloud-init.network-config value.",
+#                    "Ignoring LXD config user.vendor-data in favor of"
+#                    " cloud-init.vendor-data value.",
+#                ],
+#            ),
+#        ),
+#    )
+#    @mock.patch.object(lxd.requests.Session, "get")
+#    def test_read_metadata_handles_unexpected_content_or_http_status(
+#        self, m_session_get, get_devices, url_responses, expected, logs, caplog
+#    ):
+#        """read_metadata handles valid and invalid content and status codes."""
+#
+#        def fake_get(url):
+#            """Mock Response json, ok, status_code, text from url_responses."""
+#            m_resp = mock.MagicMock()
+#            content = url_responses.get(url, "")
+#            m_resp.json.side_effect = lambda: json.loads(content)
+#            if content:
+#                mock_ok = mock.PropertyMock(return_value=True)
+#                mock_status_code = mock.PropertyMock(return_value=200)
+#            else:
+#                mock_ok = mock.PropertyMock(return_value=False)
+#                mock_status_code = mock.PropertyMock(return_value=404)
+#            type(m_resp).ok = mock_ok
+#            type(m_resp).status_code = mock_status_code
+#            mock_text = mock.PropertyMock(return_value=content)
+#            type(m_resp).text = mock_text
+#            return m_resp
+#
+#        m_session_get.side_effect = fake_get
+#        metadata_keys = MetaDataKeys.META_DATA | MetaDataKeys.CONFIG
+#        if get_devices:
+#            metadata_keys |= MetaDataKeys.DEVICES
+#        if isinstance(expected, Exception):
+#            with pytest.raises(type(expected), match=re.escape(str(expected))):
+#                lxd.read_metadata(metadata_keys=metadata_keys)
+#        else:
+#            assert expected == lxd.read_metadata(metadata_keys=metadata_keys)
+#        for log in logs:
+#            assert log in caplog.text
+#
+#    @pytest.mark.parametrize(
+#        "metadata_keys, expected_get_urls",
+#        [
+#            (MetaDataKeys.NONE, []),
+#            (MetaDataKeys.META_DATA, ["http://lxd/1.0/meta-data"]),
+#            (MetaDataKeys.CONFIG, ["http://lxd/1.0/config"]),
+#            (MetaDataKeys.DEVICES, ["http://lxd/1.0/devices"]),
+#            (
+#                MetaDataKeys.DEVICES | MetaDataKeys.CONFIG,
+#                ["http://lxd/1.0/config", "http://lxd/1.0/devices"],
+#            ),
+#            (
+#                MetaDataKeys.ALL,
+#                [
+#                    "http://lxd/1.0/meta-data",
+#                    "http://lxd/1.0/config",
+#                    "http://lxd/1.0/devices",
+#                ],
+#            ),
+#        ],
+#    )
+#    @mock.patch.object(lxd.requests.Session, "get")
+#    def test_read_metadata_keys(
+#        self, m_session_get, metadata_keys, expected_get_urls
+#    ):
+#        lxd.read_metadata(metadata_keys=metadata_keys)
+#        assert (
+#            list(map(mock.call, expected_get_urls))
+#            == m_session_get.call_args_list
+#        )
+#
+#
+## vi: ts=4 expandtab
