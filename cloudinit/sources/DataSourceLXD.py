@@ -17,9 +17,6 @@ import json
 from json.decoder import JSONDecodeError
 from typing import Any, Dict, Union, cast
 
-import aiohttp
-import asyncio
-
 import requests
 from requests.adapters import HTTPAdapter
 
@@ -29,6 +26,13 @@ from urllib3.connectionpool import HTTPConnectionPool
 
 from cloudinit import log as logging
 from cloudinit import sources, subp, url_helper, util
+
+try:
+    import aiohttp
+    import asyncio
+    EVENT_TYPE = "websocket"
+except ModuleNotFoundError:
+    EVENT_TYPE = "http_stream"
 
 LOG = logging.getLogger(__name__)
 
@@ -49,20 +53,6 @@ CONFIG_KEY_ALIASES = {
 }
 
 
-def _do_stream_request(
-        session: requests.Session, url: str, do_raise: bool = True
-) -> requests.Request:
-    with session.get(url, stream=True) as resp:
-        if not resp.encoding:
-            resp.encoding = 'utf-8'
-        LOG.debug("[GET] [HTTP-stream:%d] %s Open", resp.status_code, url)
-        lines = "\n".join(resp.iter_lines())
-            import pdb; pdb.set_trace()
-
-        return lines
-
-    LOG.debug("[GET] [HTTP-stream:%d] %s Closed", resp.status_code, url)
-
 def event_occurred_streaming():
     with requests.Session() as session:
         session.mount(
@@ -71,21 +61,26 @@ def event_occurred_streaming():
         )
         response = _do_request(
             session, LXD_EVENTS, do_raise=False, stream=True)
+        LOG.info("response: %s" % response)
 
-        # Use whatever chunk_size is sent by the server
-        from remote_pdb import RemotePdb
-        for msg in response.iter_lines():
-            RemotePdb('127.0.0.1', 8080).set_trace()
-
-            LOG.info("message received %s" % msg)
-            data = json.loads(msg.text)
-            LOG.info("message received %s" % data)
+        # chunk_size will cause this iterator to return once the buffer
+        # contains aggregated responses of that size or greater.
+        #
+        # This means that the default chunk_size (512) will not
+        # return an event for device or config events that have a content
+        # of less than 512 bytes. Set chunk_size=1 to ensure that an
+        # event always causes an iteration in this loop.
+        for msg in response.iter_lines(chunk_size=1):
+            if not msg:
+                continue
+            LOG.warning("message received %s" % msg)
+            data = json.loads(msg)
+            LOG.warning("message received %s" % data)
             t = data.get("type")
-            LOG.info("message received %s" % t)
+            LOG.warning("message received %s" % t)
             if t in ("config", "device"):
                 LOG.info("true")
                 return True
-            LOG.info("false")
 
 
 async def event_occurred_aiohttp():
@@ -215,9 +210,11 @@ class DataSourceLXD(sources.DataSource):
 
         for lxd this happens when there is a changed config or device
         """
-        if False:
+        if "websocket" == EVENT_TYPE:
+            LOG.info("Polling on events with aiohttp")
             return asyncio.run(event_occurred_aiohttp())
-        else:
+        elif "http_stream" == EVENT_TYPE:
+            LOG.info("Polling on events with requests streaming")
             return event_occurred_streaming()
 
     def _is_platform_viable(self) -> bool:
