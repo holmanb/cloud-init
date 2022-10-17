@@ -615,8 +615,7 @@ def main_poll(action_name, args):
                 # presumably, cloud-init clean --reboot is
                 # not the final expected behavior, but until
                 # agreed upon behavior is defined, this serves as
-                # a behavior that can be used for evaluating this
-                # behavior
+                # a reconfiguration response that can be used for evaluation
                 subp(["cloud-init", "clean", "--reboot"])
     return []
 

@@ -73,11 +73,8 @@ def event_occurred_streaming():
         for msg in response.iter_lines(chunk_size=1):
             if not msg:
                 continue
-            LOG.warning("message received %s" % msg)
             data = json.loads(msg)
-            LOG.warning("message received %s" % data)
             t = data.get("type")
-            LOG.warning("message received %s" % t)
             if t in ("config", "device"):
                 LOG.info("true")
                 return True
