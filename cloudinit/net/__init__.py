@@ -11,6 +11,7 @@ import ipaddress
 import logging
 import os
 import re
+import time
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -1000,52 +1001,69 @@ def get_interfaces_by_mac_on_linux(blacklist_drivers=None) -> dict:
 
     Bridges and any devices that have a 'stolen' mac are excluded."""
     ret: dict = {}
-    for name, mac, _driver, _devid in get_interfaces(
-        blacklist_drivers=blacklist_drivers
-    ):
-        if mac in ret:
-            raise RuntimeError(
-                "duplicate mac found! both '%s' and '%s' have mac '%s'"
-                % (name, ret[mac], mac)
-            )
-        ret[mac] = name
-
-        # Pretend that an Infiniband GUID is an ethernet address for Openstack
-        # configuration purposes
-        # TODO: move this format to openstack
-        ib_mac = get_ib_interface_hwaddr(name, True)
-        if ib_mac:
-
-            # If an Ethernet mac address happens to collide with a few bits in
-            # an IB GUID, prefer the ethernet address.
-            #
-            # Log a message in case a user is troubleshooting openstack, but
-            # don't fall over, since this really isn't _a_ problem, and
-            # openstack makes weird assumptions that cause it to fail it's
-            # really not _our_ problem.
-            #
-            # These few bits selected in get_ib_interface_hwaddr() are not
-            # guaranteed to be globally unique in InfiniBand, and really make
-            # no sense to compare them to Ethernet mac addresses. This appears
-            # to be a # workaround for openstack-specific behavior[1], and for
-            # now leave it to avoid breaking openstack
-            # but this should be removed from get_interfaces_by_mac_on_linux()
-            # because IB GUIDs are not mac addresses, and operate on a separate
-            # L2 protocol so address collision doesn't matter.
-            #
-            # [1] sources/helpers/openstack.py:convert_net_json() expects
-            # net.get_interfaces_by_mac() to return IB addresses in this format
-            if ib_mac not in ret:
-                ret[ib_mac] = name
-            else:
-                LOG.warning(
-                    "Ethernet and InfiniBand interfaces have the same address"
-                    " both '%s' and '%s' have address '%s'.",
-                    name,
-                    ret[ib_mac],
-                    ib_mac,
+    retry = 50
+    initial_retry = True
+    sleep_time = 0.01
+    while retry:
+        for name, mac, _driver, _devid in get_interfaces(
+            blacklist_drivers=blacklist_drivers
+        ):
+            if mac in ret:
+                if retry:
+                    if initial_retry:
+                        LOG.warning(
+                            "Duplicate mac found, hv_netsvc might not be "
+                            "initialized yet, will retry up to "
+                            f"{sleep_time*retry}s before aborting."
+                        )
+                        initial_retry = False
+                    retry -= 1
+                    time.sleep(sleep_time)
+                    break
+                raise RuntimeError(
+                    "duplicate mac found! both '%s' and '%s' have mac '%s'"
+                    % (name, ret[mac], mac)
                 )
-    return ret
+            ret[mac] = name
+
+            # Pretend that an Infiniband GUID is an ethernet address for
+            # Openstack configuration purposes
+            # TODO: move this format to openstack
+            ib_mac = get_ib_interface_hwaddr(name, True)
+            if ib_mac:
+
+                # If an Ethernet mac address happens to collide with a few bits
+                # in an IB GUID, prefer the ethernet address.
+                #
+                # Log a message in case a user is troubleshooting openstack,
+                # but don't fall over, since this really isn't _a_ problem, and
+                # openstack makes weird assumptions that cause it to fail it's
+                # really not _our_ problem.
+                #
+                # These few bits selected in get_ib_interface_hwaddr() are not
+                # guaranteed to be globally unique in InfiniBand, and really
+                # make no sense to compare them to Ethernet mac addresses. This
+                # appears # to be a workaround for openstack-specific
+                # behavior[1], and for now leave it to avoid breaking openstack
+                # but this should be removed from
+                # get_interfaces_by_mac_on_linux() because IB GUIDs are not mac
+                # addresses, and operate on a separate L2 protocol so address
+                # collision doesn't matter.
+                #
+                # [1] sources/helpers/openstack.py:convert_net_json() expects
+                # net.get_interfaces_by_mac() to return IB addresses in this
+                # format
+                if ib_mac not in ret:
+                    ret[ib_mac] = name
+                else:
+                    LOG.warning(
+                        "Ethernet and InfiniBand interfaces have the same "
+                        " address both '%s' and '%s' have address '%s'.",
+                        name,
+                        ret[ib_mac],
+                        ib_mac,
+                    )
+        return ret
 
 
 def get_interfaces(blacklist_drivers=None) -> list:
