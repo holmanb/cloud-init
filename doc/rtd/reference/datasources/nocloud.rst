@@ -33,12 +33,11 @@ With ``ds=nocloud``, the ``seedfrom`` value must start with ``/`` or
 ``file://``.  With ``ds=nocloud-net``, the ``seedfrom`` value must start
 with ``http://`` or ``https://`` and end with a trailing ``/``.
 
-Cloud-init performs variable expansion of the ``seedfrom`` URL for any DMI
-kernel variables present in :file:`/sys/class/dmi/id` (kenv on FreeBSD).
-Your ``seedfrom`` URL can contain variable names of the format
-``__dmi.varname__`` to indicate to the ``cloud-init`` NoCloud datasource that
-``dmi.varname`` should be expanded to the value of the DMI system attribute
-wanted.
+``Cloud-init`` performs variable expansion of the ``seedfrom`` URL for any DMI
+kernel variables present in :file:`/sys/class/dmi/id` (kenv on FreeBSD). Your
+``seedfrom`` URL can contain variable names of the format ``__dmi.varname__``
+to indicate to ``cloud-init`` NoCloud datasource that ``dmi.varname`` should be
+expanded to the value of the DMI system attribute wanted.
 
 .. list-table:: Available DMI variables for expansion in ``seedfrom`` URL
   :widths: 35 35 30
