@@ -57,7 +57,7 @@ SCHEMA_DOC_TMPL = """
 {examples}
 """
 SCHEMA_PROPERTY_HEADER = "**Config schema**:"
-SCHEMA_PROPERTY_TMPL = "{prefix}**{prop_name}:** ({prop_type}){description}"
+SCHEMA_PROPERTY_TMPL = "{prefix}**{prop_name}:** ({prop_type})\n\n{prefix}  {description}"
 SCHEMA_LIST_ITEM_TMPL = (
     "{prefix}Each object in **{prop_name}** list supports the following keys:"
 )
