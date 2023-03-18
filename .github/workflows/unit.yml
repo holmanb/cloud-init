@@ -1,6 +1,7 @@
 name: Unit Tests
 on:
   pull_request:
+  push:
 concurrency:
   group: 'ci-${{ github.workflow }}-${{ github.ref }}'
   cancel-in-progress: true
