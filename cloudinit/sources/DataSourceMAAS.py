@@ -58,6 +58,7 @@ class DataSourceMAAS(sources.DataSource):
         return "%s [%s]" % (root, self.base_url)
 
     def _get_data(self):
+        # Here, right?
         mcfg = self.ds_cfg
 
         try:

@@ -135,6 +135,7 @@ def apply_reporting_cfg(cfg):
         reporting.update_configuration(cfg.get("reporting"))
 
 
+# Move to datasourcemaas
 def parse_cmdline_url(cmdline, names=("cloud-config-url", "url")):
     data = util.keyval_str_to_dict(cmdline)
     for key in names:
@@ -143,6 +144,7 @@ def parse_cmdline_url(cmdline, names=("cloud-config-url", "url")):
     raise KeyError("No keys (%s) found in string '%s'" % (cmdline, names))
 
 
+# Move to datasourcemaas
 def attempt_cmdline_url(path, network=True, cmdline=None) -> Tuple[int, str]:
     """Write data from url referenced in command line to path.
 
@@ -292,6 +294,8 @@ def main_init(name, args):
     if args.local:
         deps = [sources.DEP_FILESYSTEM]
 
+    # TODO: Why does this MAAS-specific code run during every datasource?
+    # TODO: Wouldn't running this during MAAS's init stage make more sense?
     early_logs = [
         attempt_cmdline_url(
             path=os.path.join(
