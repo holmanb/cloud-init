@@ -4,8 +4,8 @@
 """
 import contextlib
 import logging
-from typing import Any, Dict, List, Optional, Callable
 from functools import partial
+from typing import Any, Callable, Dict, List, Optional
 
 import cloudinit.net as net
 from cloudinit import subp
@@ -129,7 +129,7 @@ class EphemeralIPv4Network:
             self.broadcast,
         )
         try:
-            self.distro.net_ops.add_addr(cidr, self.interface, self.broadcast)
+            self.distro.net_ops.add_addr(self.interface, cidr, self.broadcast)
         except subp.ProcessExecutionError as e:
             if "File exists" not in str(e.stderr):
                 raise
@@ -145,30 +145,30 @@ class EphemeralIPv4Network:
                 partial(self.distro.link_down, self.interface)
             )
             self.cleanup_cmds.append(
-                partial(self.distro.net_ops.del_addr, cidr, self.interface)
+                partial(self.distro.net_ops.del_addr, self.interface, cidr)
             )
 
     def _bringup_static_routes(self):
         # static_routes = [("169.254.169.254/32", "130.56.248.255"),
         #                  ("0.0.0.0/0", "130.56.240.1")]
         for net_address, gateway in self.static_routes:
-            self.distro.net_ops.add_gateway(
-                net_address, self.interface, gateway
+            self.distro.net_ops.append_route(
+                self.interface, net_address, gateway
             )
             self.cleanup_cmds.insert(
                 0,
                 partial(
-                    self.distro.net_ops.del_gateway,
-                    net_address,
+                    self.distro.net_ops.del_route,
                     self.interface,
-                    gateway
-                )
+                    net_address,
+                    gateway=gateway,
+                ),
             )
 
     def _bringup_router(self):
         """Perform the ip commands to fully setup the router if needed."""
         # Check if a default route exists and exit if it does
-        out, _ = subp.subp(["ip", "route", "show", "0.0.0.0/0"], capture=True)
+        out = self.distro.net_ops.has_default_route()
         if "default" in out:
             LOG.debug(
                 "Skip ephemeral route setup. %s already has default route: %s",
@@ -176,50 +176,25 @@ class EphemeralIPv4Network:
                 out.strip(),
             )
             return
-        subp.subp(
-            [
-                "ip",
-                "-4",
-                "route",
-                "add",
-                self.router,
-                "dev",
-                self.interface,
-                "src",
-                self.ip,
-            ],
-            capture=True,
+        self.distro.net_ops.add_route(
+            self.interface, self.router, source_address=self.ip
         )
         self.cleanup_cmds.insert(
             0,
-            [
-                "ip",
-                "-4",
-                "route",
-                "del",
-                self.router,
-                "dev",
-                self.interface,
-                "src",
-                self.ip,
-            ],
+            partial(
+                self.distro.net_ops.del_route(
+                    self.interface,
+                    self.router,
+                    source_address=self.ip,
+                )
+            ),
         )
-        subp.subp(
-            [
-                "ip",
-                "-4",
-                "route",
-                "add",
-                "default",
-                "via",
-                self.router,
-                "dev",
-                self.interface,
-            ],
-            capture=True,
+        self.distro.net_ops.add_route(
+            self.interface, "default", gateway=self.router
         )
         self.cleanup_cmds.insert(
-            0, ["ip", "-4", "route", "del", "default", "dev", self.interface]
+            0,
+            partial(self.distro.net_ops.del_route(self.interface, "default")),
         )
 
 

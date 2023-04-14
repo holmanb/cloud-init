@@ -99,33 +99,54 @@ class NetworkOps:
         subp.subp(["ip", "link", "set", "dev", interface, "down"])
 
     @staticmethod
-    def add_route(interface: str):
-        subp.subp(["ip", "link", "set", "dev", interface, "down"])
-
-    @staticmethod
-    def del_route(interface: str):
-        subp.subp(["ip", "link", "set", "dev", interface, "down"])
-
-    @staticmethod
-    def add_gateway(address: str, interface: str, gateway: str):
+    def add_route(
+        interface: str,
+        route: str,
+        *,
+        gateway: Optional[str] = None,
+        source_address: Optional[str] = None,
+    ):
         subp.subp(
-            [
-                "ip", "-4", "route", "append", address
-            ] + (
-                ["via" + gateway] if gateway != "0.0.0.0" else []
-            ) + ["dev", interface]
+            ["ip", "-4", "route", "add", route]
+            + (["via" + gateway] if gateway and gateway != "0.0.0.0" else [])
+            + [
+                "dev",
+                interface,
+            ]
+            + (["src", source_address] if source_address else []),
         )
 
     @staticmethod
-    def del_gateway(address: str, interface: str, gateway):
+    def append_route(address: str, interface: str, gateway: str):
         subp.subp(
-            ["ip", "-4", "route", "del", address] + (
-                ["via" + gateway] if gateway != "0.0.0.0" else []
-            ) + ["dev", interface]
+            ["ip", "-4", "route", "append", address]
+            + (["via" + gateway] if gateway and gateway != "0.0.0.0" else [])
+            + ["dev", interface]
         )
 
     @staticmethod
-    def add_addr(address: str, interface: str, broadcast: str):
+    def del_route(
+        interface: str,
+        address: str,
+        *,
+        gateway: Optional[str] = None,
+        source_address: Optional[str] = None,
+    ):
+        subp.subp(
+            ["ip", "-4", "route", "del", address]
+            + (["via", gateway] if gateway and gateway != "0.0.0.0" else [])
+            + ["dev", interface]
+            + (["src", source_address] if source_address else [])
+        )
+
+    @staticmethod
+    def get_default_route() -> str:
+        return subp.subp(
+            ["ip", "route", "show", "0.0.0.0/0"], capture=True
+        ).stdout
+
+    @staticmethod
+    def add_addr(interface: str, address: str, broadcast: str):
         subp.subp(
             [
                 "ip",
@@ -137,13 +158,13 @@ class NetworkOps:
                 "broadcast",
                 broadcast,
                 "dev",
-                interface
+                interface,
             ],
-            update_env={"LANG": "C"}
+            update_env={"LANG": "C"},
         )
 
     @staticmethod
-    def del_addr(address: str, interface: str):
+    def del_addr(interface: str, address: str):
         subp.subp(
             ["ip", "-family", "inet", "addr", "del", address, "dev", interface]
         )
@@ -154,7 +175,7 @@ class NetworkOps:
         lease_file: str,
         pid_file: str,
         interface: str,
-        config_file: str
+        config_file: str,
     ) -> list[str]:
         return [
             path,

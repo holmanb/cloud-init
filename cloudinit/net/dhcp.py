@@ -259,7 +259,7 @@ class IscDhclient(DhcpClient):
                     lease_file,
                     pid_file,
                     interface,
-                    config_file
+                    config_file,
                 )
             )
         except subp.ProcessExecutionError as error:

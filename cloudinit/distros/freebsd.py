@@ -24,14 +24,11 @@ class NetworkOps(cloudinit.distros.bsd.NetworkOps):
         lease_file: str,
         pid_file: str,
         interface: str,
-        config_file: str
+        config_file: str,
     ):
-        return [
-            "-l",
-            lease_file,
-            "-p",
-            pid_file
-        ] + (["-c", config_file, interface] if config_file else [interface])
+        return ["-l", lease_file, "-p", pid_file] + (
+            ["-c", config_file, interface] if config_file else [interface]
+        )
 
 
 class Distro(cloudinit.distros.bsd.BSD):
