@@ -95,6 +95,60 @@ class NetworkOps:
         subp.subp(["ip", "link", "set", "dev", interface, "up"])
 
     @staticmethod
+    def link_down(interface: str):
+        subp.subp(["ip", "link", "set", "dev", interface, "down"])
+
+    @staticmethod
+    def add_route(interface: str):
+        subp.subp(["ip", "link", "set", "dev", interface, "down"])
+
+    @staticmethod
+    def del_route(interface: str):
+        subp.subp(["ip", "link", "set", "dev", interface, "down"])
+
+    @staticmethod
+    def add_gateway(address: str, interface: str, gateway: str):
+        subp.subp(
+            [
+                "ip", "-4", "route", "append", address
+            ] + (
+                ["via" + gateway] if gateway != "0.0.0.0" else []
+            ) + ["dev", interface]
+        )
+
+    @staticmethod
+    def del_gateway(address: str, interface: str, gateway):
+        subp.subp(
+            ["ip", "-4", "route", "del", address] + (
+                ["via" + gateway] if gateway != "0.0.0.0" else []
+            ) + ["dev", interface]
+        )
+
+    @staticmethod
+    def add_addr(address: str, interface: str, broadcast: str):
+        subp.subp(
+            [
+                "ip",
+                "-family",
+                "inet",
+                "addr",
+                "add",
+                address,
+                "broadcast",
+                broadcast,
+                "dev",
+                interface
+            ],
+            update_env={"LANG": "C"}
+        )
+
+    @staticmethod
+    def del_addr(address: str, interface: str):
+        subp.subp(
+            ["ip", "-family", "inet", "addr", "del", address, "dev", interface]
+        )
+
+    @staticmethod
     def build_dhclient_cmd(
         path: str,
         lease_file: str,
@@ -110,10 +164,9 @@ class NetworkOps:
             lease_file,
             "-pf",
             pid_file,
-            interface,
             "-sf",
             "/bin/true",
-        ] + ["-cf", config_file] if config_file else []
+        ] + (["-cf", config_file, interface] if config_file else [interface])
 
 
 class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
