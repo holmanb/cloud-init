@@ -89,6 +89,33 @@ PREFERRED_NTP_CLIENTS = ["chrony", "systemd-timesyncd", "ntp", "ntpdate"]
 LDH_ASCII_CHARS = string.ascii_letters + string.digits + "-"
 
 
+class NetworkOps:
+    @staticmethod
+    def link_up(interface: str):
+        subp.subp(["ip", "link", "set", "dev", interface, "up"])
+
+    @staticmethod
+    def build_dhclient_cmd(
+        path: str,
+        lease_file: str,
+        pid_file: str,
+        interface: str,
+        config_file: str
+    ) -> list[str]:
+        return [
+            path,
+            "-1",
+            "-v",
+            "-lf",
+            lease_file,
+            "-pf",
+            pid_file,
+            interface,
+            "-sf",
+            "/bin/true",
+        ] + ["-cf", config_file] if config_file else []
+
+
 class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
     pip_package_name = "python3-pip"
     usr_lib_exec = "/usr/lib"
@@ -104,6 +131,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
     # This is used by self.shutdown_command(), and can be overridden in
     # subclasses
     shutdown_options_map = {"halt": "-H", "poweroff": "-P", "reboot": "-r"}
+    net_ops = NetworkOps
 
     _ci_pkl_version = 1
     prefer_fqdn = False
@@ -118,6 +146,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         self.name = name
         self.networking: Networking = self.networking_cls()
         self.dhcp_client_priority = [dhcp.IscDhclient, dhcp.Dhcpcd]
+        self.net_ops = NetworkOps
 
     def _unpickle(self, ci_pkl_version: int) -> None:
         """Perform deserialization fixes for Distro."""

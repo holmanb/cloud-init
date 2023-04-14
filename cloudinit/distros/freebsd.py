@@ -17,6 +17,26 @@ from cloudinit.settings import PER_INSTANCE
 LOG = logging.getLogger(__name__)
 
 
+class NetworkOps(cloudinit.distros.bsd.NetworkOps):
+    @staticmethod
+    def build_dhclient_cmd(
+        path: str,
+        lease_file: str,
+        pid_file: str,
+        interface: str,
+        config_file: str
+    ):
+        return [
+            "-l",
+            lease_file,
+            "-p",
+            pid_file,
+            "-c",
+            config_file,
+            interface,
+        ]
+
+
 class Distro(cloudinit.distros.bsd.BSD):
     """
     Distro subclass for FreeBSD.

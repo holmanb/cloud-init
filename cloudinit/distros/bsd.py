@@ -9,6 +9,10 @@ from cloudinit.distros.networking import BSDNetworking
 
 LOG = logging.getLogger(__name__)
 
+class NetworkOps(distros.NetworkOps):
+    @staticmethod
+    def link_up(interface: str):
+        pass
 
 class BSD(distros.Distro):
     networking_cls = BSDNetworking
@@ -27,6 +31,7 @@ class BSD(distros.Distro):
     # There is no update/upgrade on OpenBSD
     pkg_cmd_update_prefix: Optional[List[str]] = None
     pkg_cmd_upgrade_prefix: Optional[List[str]] = None
+    net_ops = NetworkOps
 
     def __init__(self, name, cfg, paths):
         super().__init__(name, cfg, paths)
@@ -36,6 +41,7 @@ class BSD(distros.Distro):
         self._runner = helpers.Runners(paths)
         cfg["ssh_svcname"] = "sshd"
         self.osfamily = platform.system().lower()
+        self.net_ops = NetworkOps
 
     def _read_system_hostname(self):
         sys_hostname = self._read_hostname(self.hostname_conf_fn)
