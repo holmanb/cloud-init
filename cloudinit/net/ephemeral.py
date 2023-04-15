@@ -140,9 +140,9 @@ class EphemeralIPv4Network:
             )
         else:
             # Address creation success, bring up device and queue cleanup
-            self.distro.link_up(self.interface)
+            self.distro.net_ops.link_up(self.interface)
             self.cleanup_cmds.append(
-                partial(self.distro.link_down, self.interface)
+                partial(self.distro.net_ops.link_down, self.interface)
             )
             self.cleanup_cmds.append(
                 partial(self.distro.net_ops.del_addr, self.interface, cidr)
@@ -168,7 +168,7 @@ class EphemeralIPv4Network:
     def _bringup_router(self):
         """Perform the ip commands to fully setup the router if needed."""
         # Check if a default route exists and exit if it does
-        out = self.distro.net_ops.has_default_route()
+        out = self.distro.net_ops.get_default_route()
         if "default" in out:
             LOG.debug(
                 "Skip ephemeral route setup. %s already has default route: %s",
@@ -224,7 +224,7 @@ class EphemeralIPv6Network:
         https://www.kernel.org/doc/html/latest/networking/ipv6.html
         """
         if net.read_sys_net(self.interface, "operstate") != "up":
-            self.distro.link_up(self.interface)
+            self.distro.net_ops.link_up(self.interface)
 
     def __exit__(self, *_args):
         """No need to set the link to down state"""
@@ -315,7 +315,7 @@ class EphemeralDHCPv4:
             )
         if self.connectivity_url_data:
             kwargs["connectivity_url_data"] = self.connectivity_url_data
-        ephipv4 = EphemeralIPv4Network(**kwargs)
+        ephipv4 = EphemeralIPv4Network(self.distro, **kwargs)
         ephipv4.__enter__()
         self._ephipv4 = ephipv4
         return self.lease

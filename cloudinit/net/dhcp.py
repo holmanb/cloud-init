@@ -254,7 +254,7 @@ class IscDhclient(DhcpClient):
 
         try:
             out, err = subp.subp(
-                distro.net_ops.build_dhclient_cmd(
+                distro.build_dhclient_cmd(
                     self.dhclient_path,
                     lease_file,
                     pid_file,

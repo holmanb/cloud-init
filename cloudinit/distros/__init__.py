@@ -32,7 +32,7 @@ from cloudinit import (
 from cloudinit.distros.networking import LinuxNetworking, Networking
 from cloudinit.distros.parsers import hosts
 from cloudinit.features import ALLOW_EC2_MIRRORS_ON_NON_AWS_INSTANCE_TYPES
-from cloudinit.net import activators, dhcp, eni, network_state, renderers
+from cloudinit.net import activators, dhcp, eni, network_state, renderers, iproute2
 from cloudinit.net.network_state import parse_net_config_data
 from cloudinit.net.renderer import Renderer
 
@@ -89,107 +89,6 @@ PREFERRED_NTP_CLIENTS = ["chrony", "systemd-timesyncd", "ntp", "ntpdate"]
 LDH_ASCII_CHARS = string.ascii_letters + string.digits + "-"
 
 
-class NetworkOps:
-    @staticmethod
-    def link_up(interface: str):
-        subp.subp(["ip", "link", "set", "dev", interface, "up"])
-
-    @staticmethod
-    def link_down(interface: str):
-        subp.subp(["ip", "link", "set", "dev", interface, "down"])
-
-    @staticmethod
-    def add_route(
-        interface: str,
-        route: str,
-        *,
-        gateway: Optional[str] = None,
-        source_address: Optional[str] = None,
-    ):
-        subp.subp(
-            ["ip", "-4", "route", "add", route]
-            + (["via" + gateway] if gateway and gateway != "0.0.0.0" else [])
-            + [
-                "dev",
-                interface,
-            ]
-            + (["src", source_address] if source_address else []),
-        )
-
-    @staticmethod
-    def append_route(address: str, interface: str, gateway: str):
-        subp.subp(
-            ["ip", "-4", "route", "append", address]
-            + (["via" + gateway] if gateway and gateway != "0.0.0.0" else [])
-            + ["dev", interface]
-        )
-
-    @staticmethod
-    def del_route(
-        interface: str,
-        address: str,
-        *,
-        gateway: Optional[str] = None,
-        source_address: Optional[str] = None,
-    ):
-        subp.subp(
-            ["ip", "-4", "route", "del", address]
-            + (["via", gateway] if gateway and gateway != "0.0.0.0" else [])
-            + ["dev", interface]
-            + (["src", source_address] if source_address else [])
-        )
-
-    @staticmethod
-    def get_default_route() -> str:
-        return subp.subp(
-            ["ip", "route", "show", "0.0.0.0/0"], capture=True
-        ).stdout
-
-    @staticmethod
-    def add_addr(interface: str, address: str, broadcast: str):
-        subp.subp(
-            [
-                "ip",
-                "-family",
-                "inet",
-                "addr",
-                "add",
-                address,
-                "broadcast",
-                broadcast,
-                "dev",
-                interface,
-            ],
-            update_env={"LANG": "C"},
-        )
-
-    @staticmethod
-    def del_addr(interface: str, address: str):
-        subp.subp(
-            ["ip", "-family", "inet", "addr", "del", address, "dev", interface]
-        )
-
-    @staticmethod
-    def build_dhclient_cmd(
-        path: str,
-        lease_file: str,
-        pid_file: str,
-        interface: str,
-        config_file: str,
-    ) -> list[str]:
-        return [
-            path,
-            "-1",
-            "-v",
-            "-lf",
-            lease_file,
-            "-pf",
-            pid_file,
-            "-sf",
-            "/bin/true",
-        ] + (["-cf", config_file, interface] if config_file else [interface])
-
-
 class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
     pip_package_name = "python3-pip"
     usr_lib_exec = "/usr/lib"
@@ -205,7 +104,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
     # This is used by self.shutdown_command(), and can be overridden in
     # subclasses
     shutdown_options_map = {"halt": "-H", "poweroff": "-P", "reboot": "-r"}
-    net_ops = NetworkOps
+    net_ops = iproute2
 
     _ci_pkl_version = 1
     prefer_fqdn = False
@@ -220,7 +119,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         self.name = name
         self.networking: Networking = self.networking_cls()
         self.dhcp_client_priority = [dhcp.IscDhclient, dhcp.Dhcpcd]
-        self.net_ops = NetworkOps
+        self.net_ops = iproute2
 
     def _unpickle(self, ci_pkl_version: int) -> None:
         """Perform deserialization fixes for Distro."""
@@ -1098,6 +997,26 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             ],
             **kwargs,
         )
+
+    @staticmethod
+    def build_dhclient_cmd(
+        path: str,
+        lease_file: str,
+        pid_file: str,
+        interface: str,
+        config_file: str,
+    ) -> list[str]:
+        return [
+            path,
+            "-1",
+            "-v",
+            "-lf",
+            lease_file,
+            "-pf",
+            pid_file,
+            "-sf",
+            "/bin/true",
+        ] + (["-cf", config_file, interface] if config_file else [interface])
 
 
 def _apply_hostname_transformations_to_url(url: str, transformations: list):

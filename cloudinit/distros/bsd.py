@@ -4,66 +4,11 @@ from typing import List, Optional
 from cloudinit import distros, helpers
 from cloudinit import log as logging
 from cloudinit import net, subp, util
+from cloudinit.net import bsd_netops
 from cloudinit.distros import bsd_utils
 from cloudinit.distros.networking import BSDNetworking
 
 LOG = logging.getLogger(__name__)
-
-
-class NetworkOps(distros.NetworkOps):
-    @staticmethod
-    def link_up(interface: str):
-        pass
-
-    @staticmethod
-    def link_down(interface: str):
-        pass
-
-    @staticmethod
-    def add_route(
-        interface: str,
-        route: str,
-        *,
-        gateway: Optional[str] = None,
-        source_address: Optional[str] = None
-    ):
-        pass
-
-    @staticmethod
-    def append_route(address: str, interface: str, gateway: str):
-        pass
-
-    @staticmethod
-    def del_route(
-        interface: str,
-        address: str,
-        *,
-        gateway: Optional[str] = None,
-        source_address: Optional[str] = None
-    ):
-        pass
-
-    @staticmethod
-    def get_default_route() -> str:
-        pass
-
-    @staticmethod
-    def add_addr(interface: str, address: str, broadcast: str):
-        pass
-
-    @staticmethod
-    def del_addr(interface: str, address: str):
-        pass
-
-    @staticmethod
-    def build_dhclient_cmd(
-        path: str,
-        lease_file: str,
-        pid_file: str,
-        interface: str,
-        config_file: str,
-    ) -> list[str]:
-        pass
 
 
 class BSD(distros.Distro):
@@ -83,7 +28,7 @@ class BSD(distros.Distro):
     # There is no update/upgrade on OpenBSD
     pkg_cmd_update_prefix: Optional[List[str]] = None
     pkg_cmd_upgrade_prefix: Optional[List[str]] = None
-    net_ops = NetworkOps
+    net_ops = bsd_netops
 
     def __init__(self, name, cfg, paths):
         super().__init__(name, cfg, paths)
@@ -93,7 +38,7 @@ class BSD(distros.Distro):
         self._runner = helpers.Runners(paths)
         cfg["ssh_svcname"] = "sshd"
         self.osfamily = platform.system().lower()
-        self.net_ops = NetworkOps
+        self.net_ops = bsd_netops
 
     def _read_system_hostname(self):
         sys_hostname = self._read_hostname(self.hostname_conf_fn)
