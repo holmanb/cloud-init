@@ -140,9 +140,13 @@ class EphemeralIPv4Network:
             )
         else:
             # Address creation success, bring up device and queue cleanup
-            self.distro.net_ops.link_up(self.interface)
+            self.distro.net_ops.link_up(self.interface, family="inet")
             self.cleanup_cmds.append(
-                partial(self.distro.net_ops.link_down, self.interface)
+                partial(
+                    self.distro.net_ops.link_down,
+                    self.interface,
+                    family="inet"
+                )
             )
             self.cleanup_cmds.append(
                 partial(self.distro.net_ops.del_addr, self.interface, cidr)
@@ -182,11 +186,10 @@ class EphemeralIPv4Network:
         self.cleanup_cmds.insert(
             0,
             partial(
-                self.distro.net_ops.del_route(
-                    self.interface,
-                    self.router,
-                    source_address=self.ip,
-                )
+                self.distro.net_ops.del_route,
+                self.interface,
+                self.router,
+                source_address=self.ip,
             ),
         )
         self.distro.net_ops.add_route(
@@ -194,7 +197,7 @@ class EphemeralIPv4Network:
         )
         self.cleanup_cmds.insert(
             0,
-            partial(self.distro.net_ops.del_route(self.interface, "default")),
+            partial(self.distro.net_ops.del_route, self.interface, "default"),
         )
 
 

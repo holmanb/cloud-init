@@ -3,12 +3,20 @@ from typing import Optional
 from cloudinit import subp
 
 
-def link_up(interface: str):
-    subp.subp(["ip", "link", "set", "dev", interface, "up"])
+def link_up(interface: str, family: Optional[str] = None):
+    subp.subp(
+        ["ip"] + (
+            ["-family", family] if family else []
+        ) + ["link", "set", "dev", interface, "up"]
+    )
 
 
-def link_down(interface: str):
-    subp.subp(["ip", "link", "set", "dev", interface, "down"])
+def link_down(interface: str, family: Optional[str] = None):
+    subp.subp(
+        ["ip"] + (
+            ["-family", family] if family else []
+        ) + ["link", "set", "dev", interface, "down"]
+    )
 
 
 def add_route(
@@ -20,7 +28,7 @@ def add_route(
 ):
     subp.subp(
         ["ip", "-4", "route", "add", route]
-        + (["via" + gateway] if gateway and gateway != "0.0.0.0" else [])
+        + (["via", gateway] if gateway and gateway != "0.0.0.0" else [])
         + [
             "dev",
             interface,
@@ -29,10 +37,10 @@ def add_route(
     )
 
 
-def append_route(address: str, interface: str, gateway: str):
+def append_route(interface: str, address: str, gateway: str):
     subp.subp(
         ["ip", "-4", "route", "append", address]
-        + (["via" + gateway] if gateway and gateway != "0.0.0.0" else [])
+        + (["via", gateway] if gateway and gateway != "0.0.0.0" else [])
         + ["dev", interface]
     )
 
@@ -54,7 +62,7 @@ def del_route(
 
 def get_default_route() -> str:
     return subp.subp(
-        ["ip", "route", "show", "0.0.0.0/0"], capture=True
+        ["ip", "route", "show", "0.0.0.0/0"],
     ).stdout
 
 
