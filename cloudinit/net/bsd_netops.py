@@ -2,11 +2,11 @@ from typing import Optional
 
 
 def link_up(interface: str):
-    pass
+    raise FileNotFoundError("test")
 
 
 def link_down(interface: str):
-    pass
+    raise FileNotFoundError("test")
 
 
 def add_route(
@@ -16,11 +16,11 @@ def add_route(
     gateway: Optional[str] = None,
     source_address: Optional[str] = None
 ):
-    pass
+    raise FileNotFoundError("test")
 
 
 def append_route(address: str, interface: str, gateway: str):
-    pass
+    raise FileNotFoundError("test")
 
 
 def del_route(
@@ -30,16 +30,16 @@ def del_route(
     gateway: Optional[str] = None,
     source_address: Optional[str] = None
 ):
-    pass
+    raise FileNotFoundError("test")
 
 
 def get_default_route() -> str:
-    pass
+    raise FileNotFoundError("test")
 
 
 def add_addr(interface: str, address: str, broadcast: str):
-    pass
+    raise FileNotFoundError("test")
 
 
 def del_addr(interface: str, address: str):
-    pass
+    raise FileNotFoundError("test")
