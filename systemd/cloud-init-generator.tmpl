@@ -31,15 +31,8 @@ CLOUD_SYSTEM_TARGET="/lib/systemd/system/cloud-init.target"
 # end: template section
 
 debug() {
-    local lvl="$1"
-    shift
-    [ "$lvl" -gt "$DEBUG_LEVEL" ] && return
-    if [ -z "$LOG" ]; then
-        { [ -d "$LOG_D" ] || mkdir -p "$LOG_D"; } &&
-            { : > "$LOG_F"; } >/dev/null 2>&1 && LOG="$LOG_F" ||
-            LOG="/dev/kmsg"
-    fi
-    echo "$@" >> "$LOG"
+    [ "$1" -gt "$DEBUG_LEVEL" ] && return
+    echo "$2" >> "$LOG"
 }
 
 main() {
@@ -47,6 +40,10 @@ main() {
     local target_name="multi-user.target" gen_d="$early_d"
     local link_path="$gen_d/${target_name}.wants/${CLOUD_TARGET_NAME}"
     local ds="" ret=""
+
+    { [ -d "$LOG_D" ] || mkdir -p "$LOG_D"; } &&
+        { : > "$LOG_F"; } >/dev/null 2>&1 && LOG="$LOG_F" ||
+        LOG="/dev/kmsg"
 
     debug 1 "$0 normal=$normal_d early=$early_d late=$late_d"
     debug 2 "$0 $*"
