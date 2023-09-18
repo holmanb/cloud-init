@@ -4,6 +4,7 @@
 """Debug network config format conversions."""
 import argparse
 import json
+import logging
 import os
 import sys
 

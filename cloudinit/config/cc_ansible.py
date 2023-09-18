@@ -1,10 +1,10 @@
 """ansible enables running on first boot either ansible-pull"""
 import abc
+import logging
 import os
 import re
 import sys
 from copy import deepcopy
-from logging import getLogger
 from textwrap import dedent
 from typing import Optional
 
@@ -60,7 +60,7 @@ meta: MetaSchema = {
 }
 
 __doc__ = get_meta_doc(meta)
-LOG = getLogger(__name__)
+LOG = logging.getLogger(__name__)
 CFG_OVERRIDE = "ansible_config"
 
 

@@ -9,15 +9,14 @@
 """Apt Configure: Configure apt for the user."""
 
 import glob
+import logging
 import os
 import pathlib
 import re
 import signal
 from textwrap import dedent
 
-from cloudinit import gpg
-from cloudinit import log as logging
-from cloudinit import subp, templater, util
+from cloudinit import gpg, subp, templater, util
 from cloudinit.cloud import Cloud
 from cloudinit.config import Config
 from cloudinit.config.schema import MetaSchema, get_meta_doc
@@ -1006,5 +1005,3 @@ def apt_key(
 CONFIG_CLEANERS = {
     "cloud-init": clean_cloud_init,
 }
-
-# vi: ts=4 expandtab
