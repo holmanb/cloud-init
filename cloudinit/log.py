@@ -18,11 +18,11 @@ import sys
 import time
 from contextlib import suppress
 
+DEFAULT_LOG_FORMAT = "%(asctime)s - %(filename)s[%(levelname)s]: %(message)s"
+
 
 def setupBasicLogging(level=logging.DEBUG, formatter=None):
-    formatter = formatter or logging.Formatter(
-        "%(asctime)s - %(filename)s[%(levelname)s]: %(message)s"
-    )
+    formatter = formatter or logging.Formatter(DEFAULT_LOG_FORMAT)
     root = logging.getLogger()
     for handler in root.handlers:
         if hasattr(handler, "stream") and hasattr(handler.stream, "name"):
