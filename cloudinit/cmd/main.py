@@ -725,7 +725,6 @@ def status_wrapper(name, args, data_d=None, link_d=None):
     modes = (
         "init",
         "init-local",
-        "modules-init",
         "modules-config",
         "modules-final",
     )
@@ -910,7 +909,7 @@ def main(sysv_args=None):
         action="store",
         help="Module configuration name to use (default: %(default)s).",
         default="config",
-        choices=("init", "config", "final"),
+        choices=("config", "final"),
     )
     parser_mod.set_defaults(action=("modules", main_modules))
 

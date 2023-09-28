@@ -181,19 +181,18 @@ due to semaphores in :file:`/var/lib/cloud/instance/sem/` and
 
 Generally run by OS init systems to execute ``modules:config`` and
 ``modules:final`` boot stages. This executes cloud config :ref:`modules`
-configured to run in the Init, Config and Final stages. The modules are
+configured to run in the Config and Final stages. The modules are
 declared to run in various boot stages in the file
 :file:`/etc/cloud/cloud.cfg` under keys:
 
-* ``cloud_init_modules``
 * ``cloud_config_modules``
 * ``cloud_final_modules``
 
 Can be run on the command line, but each module is gated to run only once due
 to semaphores in :file:`/var/lib/cloud/`.
 
-* :command:`--mode [init|config|final]`: Run ``modules:init``,
-  ``modules:config`` or ``modules:final`` ``cloud-init`` stages.
+* :command:`--mode [config|final]`: Run ``modules:config`` or ``modules:final``
+  ``cloud-init`` stages.
   See :ref:`boot_stages` for more info.
 
 .. _cli_query:
