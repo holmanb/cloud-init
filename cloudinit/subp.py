@@ -195,8 +195,6 @@ def subp(
     if rcs is None:
         rcs = [0]
 
-    devnull_fp = None
-
     if update_env:
         if env is None:
             env = os.environ
@@ -228,8 +226,7 @@ def subp(
     if data is None:
         # using devnull assures any reads get null, rather
         # than possibly waiting on input.
-        devnull_fp = open(os.devnull)
-        stdin = devnull_fp
+        stdin = subprocess.DEVNULL
     else:
         stdin = subprocess.PIPE
         if not isinstance(data, bytes):
@@ -263,9 +260,6 @@ def subp(
             stdout="-" if decode else b"-",
             stderr="-" if decode else b"-",
         ) from e
-    finally:
-        if devnull_fp:
-            devnull_fp.close()
     if decode:
         def ldecode(data, m="utf-8"):
             return data.decode(m, decode) if isinstance(data, bytes) else data
