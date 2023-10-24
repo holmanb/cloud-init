@@ -105,7 +105,7 @@ class TestBootcmd(CiTestCase):
                 with self.assertRaises(subp.ProcessExecutionError) as ctxt:
                     handle("does-not-matter", valid_config, cc, [])
         self.assertIn(
-            "Unexpected error while running command.\nCommand: ['/bin/sh',",
+            "Unexpected error while running command.\nCommand: [b'/bin/sh',",
             str(ctxt.exception),
         )
         self.assertIn(

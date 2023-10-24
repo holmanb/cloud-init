@@ -2379,7 +2379,7 @@ class TestCanDevBeReformatted(CiTestCase):
         log_msg = "Failed to mount device"
 
         m_subp.side_effect = subp.ProcessExecutionError(
-            "", "unknown filesystem type 'ntfs'"
+            b"", b"unknown filesystem type 'ntfs'"
         )
 
         dsaz.can_dev_be_reformatted("/dev/sda", preserve_ntfs=False)
@@ -3549,8 +3549,8 @@ class TestEphemeralNetworking:
         mock_ephemeral_dhcp_v4.return_value.obtain_lease.side_effect = [
             subp.ProcessExecutionError(
                 cmd=["failed", "cmd"],
-                stdout="test_stdout",
-                stderr="test_stderr",
+                stdout=b"test_stdout",
+                stderr=b"test_stderr",
                 exit_code=4,
             ),
             lease,
@@ -3571,7 +3571,7 @@ class TestEphemeralNetworking:
         assert mock_report_diagnostic_event.mock_calls == [
             mock.call(
                 "Command failed: cmd=['failed', 'cmd'] "
-                "stderr='test_stderr' stdout='test_stdout' exit_code=4",
+                "stderr=b'test_stderr' stdout=b'test_stdout' exit_code=4",
                 logger_func=dsaz.LOG.error,
             )
         ]
@@ -4112,8 +4112,8 @@ class TestProvisioning:
         ipv4_net.return_value.__exit__.side_effect = [
             subp.ProcessExecutionError(
                 cmd=["failed", "cmd"],
-                stdout="test_stdout",
-                stderr="test_stderr",
+                stdout=b"test_stdout",
+                stderr=b"test_stderr",
                 exit_code=4,
             ),
             None,
@@ -4344,8 +4344,8 @@ class TestProvisioning:
             subp.SubpResult("okie dokie", ""),
             subp.ProcessExecutionError(
                 cmd=["failed", "cmd"],
-                stdout="test_stdout",
-                stderr="test_stderr",
+                stdout=b"test_stdout",
+                stderr=b"test_stderr",
                 exit_code=4,
             ),
         ],

@@ -192,7 +192,7 @@ def get_ovs_internal_interfaces() -> list:
     try:
         out, _err = subp.subp(OVS_INTERNAL_INTERFACE_LOOKUP_CMD)
     except subp.ProcessExecutionError as exc:
-        if "database connection failed" in exc.stderr:
+        if "database connection failed" in exc.stderr.decode():
             LOG.info(
                 "Open vSwitch is not yet up; no interfaces will be detected as"
                 " OVS-internal"

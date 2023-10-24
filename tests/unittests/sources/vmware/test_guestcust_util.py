@@ -38,7 +38,7 @@ class TestGuestCustUtil(CiTestCase):
                 "subp",
                 return_value=SubpResult("key=value", b""),
                 side_effect=subp.ProcessExecutionError(
-                    "subp failed", exit_code=99
+                    b"", b"subp failed", exit_code=99
                 ),
             ):
                 # verify return value is 'defaultVal', not 'value'.

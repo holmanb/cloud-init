@@ -924,7 +924,7 @@ class TestUdevadmSettle(CiTestCase):
 
     def test_subp_exception_raises_to_caller(self, m_subp, m_which):
         m_which.side_effect = lambda m: m in ("udevadm",)
-        m_subp.side_effect = subp.ProcessExecutionError("BOOM")
+        m_subp.side_effect = subp.ProcessExecutionError(b"BOOM", b"")
         self.assertRaises(subp.ProcessExecutionError, util.udevadm_settle)
 
 
@@ -1584,7 +1584,7 @@ class TestMountCb:
             "'ntfs' using mount command:"
         )
         m_subp.side_effect = subp.ProcessExecutionError(
-            "", "unknown filesystem type 'ntfs'"
+            b"", b"unknown filesystem type 'ntfs'"
         )
         callback = mock.Mock(autospec=True)
         with pytest.raises(Exception):
@@ -2171,7 +2171,7 @@ class TestMountinfoParsing(helpers.ResourceUsingTestCase):
         """Handle case where there is no zpool command"""
         # mock /dev/zfs exists
         m_os.path.exists.return_value = True
-        m_sub.side_effect = subp.ProcessExecutionError("No zpool cmd")
+        m_sub.side_effect = subp.ProcessExecutionError(b"No zpool cmd", b"")
         ret = util.get_device_info_from_zpool("vmzroot")
         self.assertIsNone(ret)
 
@@ -2554,10 +2554,13 @@ class TestProcessExecutionError(helpers.TestCase):
     empty_description = "Unexpected error while running command."
 
     def test_pexec_error_indent_text(self):
-        error = subp.ProcessExecutionError()
+        error = subp.ProcessExecutionError(b"", b"")
         msg = "abc\ndef"
         formatted = "abc\n{0}def".format(" " * 4)
-        self.assertEqual(error._indent_text(msg, indent_level=4), formatted)
+        self.assertEqual(
+            error._indent_text(msg.encode(), indent_level=4),
+            formatted.encode(),
+        )
         self.assertEqual(
             error._indent_text(msg.encode(), indent_level=4),
             formatted.encode(),
@@ -2567,15 +2570,12 @@ class TestProcessExecutionError(helpers.TestCase):
         )
 
     def test_pexec_error_type(self):
-        self.assertIsInstance(subp.ProcessExecutionError(), IOError)
+        self.assertIsInstance(subp.ProcessExecutionError(b"", b""), IOError)
 
     def test_pexec_error_empty_msgs(self):
-        error = subp.ProcessExecutionError()
+        error = subp.ProcessExecutionError(b"", b"")
         self.assertTrue(
-            all(
-                attr == self.empty_attr
-                for attr in (error.stderr, error.stdout, error.reason)
-            )
+            all(attr == self.empty_attr for attr in (error.reason,))
         )
         self.assertEqual(error.description, self.empty_description)
         self.assertEqual(
@@ -2584,8 +2584,8 @@ class TestProcessExecutionError(helpers.TestCase):
                 description=self.empty_description,
                 exit_code=self.empty_attr,
                 reason=self.empty_attr,
-                stdout=self.empty_attr,
-                stderr=self.empty_attr,
+                stdout="",
+                stderr="",
                 cmd=self.empty_attr,
             ),
         )
@@ -2596,7 +2596,10 @@ class TestProcessExecutionError(helpers.TestCase):
         cmd = "test command"
         exit_code = 3
         error = subp.ProcessExecutionError(
-            stdout=stdout_msg, stderr=stderr_msg, exit_code=3, cmd=cmd
+            stdout=stdout_msg.encode(),
+            stderr=stderr_msg.encode(),
+            exit_code=3,
+            cmd=cmd,
         )
         self.assertEqual(
             str(error),
@@ -2612,8 +2615,8 @@ class TestProcessExecutionError(helpers.TestCase):
 
     def test_pexec_error_multi_line_msgs(self):
         # make sure bytes is converted handled properly when formatting
-        stdout_msg = "multi\nline\noutput message".encode()
-        stderr_msg = "multi\nline\nerror message\n\n\n"
+        stdout_msg = b"multi\nline\noutput message"
+        stderr_msg = b"multi\nline\nerror message\n\n\n"
         error = subp.ProcessExecutionError(
             stdout=stdout_msg, stderr=stderr_msg
         )

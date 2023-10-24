@@ -290,7 +290,7 @@ class TestUserDataRhevm(CiTestCase):
         """Test user_data_rhevm() where modprobe fails."""
 
         self.m_modprobe_floppy.side_effect = subp.ProcessExecutionError(
-            "Failed modprobe"
+            b"Failed modprobe", b""
         )
         dsrc = dsac.DataSourceAltCloud({}, None, self.paths)
         self.assertEqual(False, dsrc.user_data_rhevm())
@@ -299,7 +299,7 @@ class TestUserDataRhevm(CiTestCase):
         """Test user_data_rhevm() with no modprobe command."""
 
         self.m_modprobe_floppy.side_effect = subp.ProcessExecutionError(
-            "No such file or dir"
+            b"No such file or dir", b""
         )
         dsrc = dsac.DataSourceAltCloud({}, None, self.paths)
         self.assertEqual(False, dsrc.user_data_rhevm())
@@ -308,7 +308,8 @@ class TestUserDataRhevm(CiTestCase):
         """Test user_data_rhevm() where udevadm fails."""
 
         self.m_udevadm_settle.side_effect = subp.ProcessExecutionError(
-            "Failed settle."
+            b"Failed settle.",
+            b"",
         )
         dsrc = dsac.DataSourceAltCloud({}, None, self.paths)
         self.assertEqual(False, dsrc.user_data_rhevm())

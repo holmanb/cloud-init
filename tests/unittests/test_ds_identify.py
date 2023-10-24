@@ -1110,7 +1110,7 @@ class TestIsIBMProvisioning(DsIdentifyBase):
         populate_dir_with_ts(rootd, data)
         ret = self.call(rootd=rootd, func=self.funcname)
         self.assertEqual(shell_false, ret.rc)
-        self.assertIn("from previous boot", ret.stderr)
+        self.assertIn(b"from previous boot", ret.stderr)
 
     def test_config_with_new_log(self):
         """A config with a log from this boot is provisioning."""

@@ -90,7 +90,7 @@ def fetch_idevs():
         # which is where grub-probe determines where /boot is.
         # it then checks for existence in /dev, which fails as host disks
         # are not exposed to the container.
-        elif "failed to get canonical path" in e.stderr:
+        elif b"failed to get canonical path" in e.stderr:
             LOG.debug("grub-probe 'failed to get canonical path'")
         else:
             # something bad has happened, continue to log the error

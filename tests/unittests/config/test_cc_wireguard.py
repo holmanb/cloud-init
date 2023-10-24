@@ -87,7 +87,7 @@ class TestWireGuard(CiTestCase):
             fail_cmds = ["not-a-valid-command"]
             if cmd in fail_cmds and capture and shell:
                 raise subp.ProcessExecutionError(
-                    "not-a-valid-command: command not found"
+                    b"not-a-valid-command: command not found",
                 )
 
         m_subp.side_effect = fake_subp
@@ -109,7 +109,7 @@ class TestWireGuard(CiTestCase):
         wg_int = {"name": "wg0"}
         distro = mock.MagicMock()  # No errors raised
         distro.manage_service.side_effect = subp.ProcessExecutionError(
-            "systemctl start wg-quik@wg0 failed: exit code 1"
+            b"systemctl start wg-quik@wg0 failed: exit code 1",
         )
         mycloud = FakeCloud(distro)
         with self.assertRaises(RuntimeError) as context_mgr:
@@ -183,7 +183,7 @@ class TestWireGuard(CiTestCase):
         """load_wireguard_kernel_module logs and raises
         kernel modules loading error."""
         m_subp.side_effect = subp.ProcessExecutionError(
-            "Some kernel module load error"
+            b"Some kernel module load error",
         )
         with self.assertRaises(subp.ProcessExecutionError) as context_manager:
             cc_wireguard.load_wireguard_kernel_module()

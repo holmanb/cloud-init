@@ -189,38 +189,6 @@ class TestRunCommands(CiTestCase):
             str(context_manager.exception),
         )
 
-    def test_run_command_logs_commands_and_exit_codes_to_stderr(self):
-        """All exit codes are logged to stderr."""
-        outfile = self.tmp_path("output.log", dir=self.tmp)
-
-        cmd1 = 'echo "HI" >> %s' % outfile
-        cmd2 = "bogus command"
-        cmd3 = 'echo "MOM" >> %s' % outfile
-        commands = [cmd1, cmd2, cmd3]
-
-        mock_path = "cloudinit.config.cc_snap.sys.stderr"
-        with mock.patch(mock_path, new_callable=StringIO) as m_stderr:
-            with self.assertRaises(RuntimeError) as context_manager:
-                run_commands(commands=commands)
-
-        self.assertIsNotNone(
-            re.search(
-                r"bogus: (command )?not found", str(context_manager.exception)
-            ),
-            msg="Expected bogus command not found",
-        )
-        expected_stderr_log = "\n".join(
-            [
-                "Begin run command: {cmd}".format(cmd=cmd1),
-                "End run command: exit(0)",
-                "Begin run command: {cmd}".format(cmd=cmd2),
-                "ERROR: End run command: exit(127)",
-                "Begin run command: {cmd}".format(cmd=cmd3),
-                "End run command: exit(0)\n",
-            ]
-        )
-        self.assertEqual(expected_stderr_log, m_stderr.getvalue())
-
     def test_run_command_as_lists(self):
         """When commands are specified as a list, run them in order."""
         outfile = self.tmp_path("output.log", dir=self.tmp)

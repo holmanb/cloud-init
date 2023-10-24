@@ -45,10 +45,10 @@ class TestResizefs(CiTestCase):
         resize_what = "/"
         devpth = "/dev/da0p2"
         err = (
-            "growfs: requested size 2.0GB is not larger than the "
-            "current filesystem size 2.0GB\n"
+            b"growfs: requested size 2.0GB is not larger than the "
+            b"current filesystem size 2.0GB\n"
         )
-        exception = ProcessExecutionError(stderr=err, exit_code=1)
+        exception = ProcessExecutionError(b"", stderr=err, exit_code=1)
         m_subp.side_effect = exception
         res = can_skip_resize(fs_type, resize_what, devpth)
         self.assertTrue(res)
@@ -71,8 +71,8 @@ class TestResizefs(CiTestCase):
         fs_type = "ufs"
         resize_what = "/"
         devpth = "/dev/da0p2"
-        err = "growfs: /dev/da0p2 is not clean - run fsck.\n"
-        exception = ProcessExecutionError(stderr=err, exit_code=1)
+        err = b"growfs: /dev/da0p2 is not clean - run fsck.\n"
+        exception = ProcessExecutionError(b"", stderr=err, exit_code=1)
         m_subp.side_effect = exception
         with self.assertRaises(ProcessExecutionError):
             can_skip_resize(fs_type, resize_what, devpth)

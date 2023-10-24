@@ -67,7 +67,10 @@ class GoodTests(CiTestCase):
             "The system has been registered with ID:"
             " 12345678-abde-abcde-1234-1234567890abc"
         )
-        m_sman_cli.side_effect = [subp.ProcessExecutionError, (reg, "bar")]
+        m_sman_cli.side_effect = [
+            subp.ProcessExecutionError(b"", b""),
+            (reg, "bar"),
+        ]
         self.handle(self.name, self.config, self.cloud_init, self.args)
         self.assertIn(mock.call(["identity"]), m_sman_cli.call_args_list)
         self.assertIn(
@@ -117,7 +120,7 @@ class GoodTests(CiTestCase):
             " 12345678-abde-abcde-1234-1234567890abc"
         )
         m_sman_cli.side_effect = [
-            subp.ProcessExecutionError,
+            subp.ProcessExecutionError(b"", b""),
             (reg, "bar"),
             ("Service level set to: self-support", ""),
             ("pool1\npool3\n", ""),
@@ -200,7 +203,7 @@ class TestBadInput(CiTestCase):
     def test_no_password(self, m_sman_cli):
         """Attempt to register without the password key/value."""
         m_sman_cli.side_effect = [
-            subp.ProcessExecutionError,
+            subp.ProcessExecutionError(b"", b""),
             (self.reg, "bar"),
         ]
         self.handle(
@@ -213,7 +216,7 @@ class TestBadInput(CiTestCase):
 
     def test_no_org(self, m_sman_cli):
         """Attempt to register without the org key/value."""
-        m_sman_cli.side_effect = [subp.ProcessExecutionError]
+        m_sman_cli.side_effect = [subp.ProcessExecutionError(b"", b"")]
         self.handle(self.name, self.config_no_key, self.cloud_init, self.args)
         m_sman_cli.assert_called_with(["identity"])
         self.assertEqual(m_sman_cli.call_count, 1)
@@ -229,7 +232,7 @@ class TestBadInput(CiTestCase):
     def test_service_level_without_auto(self, m_sman_cli):
         """Attempt to register using service-level without auto-attach key."""
         m_sman_cli.side_effect = [
-            subp.ProcessExecutionError,
+            subp.ProcessExecutionError(b"", b""),
             (self.reg, "bar"),
         ]
         self.handle(
@@ -251,7 +254,7 @@ class TestBadInput(CiTestCase):
         Register with pools that are not in the format of a list
         """
         m_sman_cli.side_effect = [
-            subp.ProcessExecutionError,
+            subp.ProcessExecutionError(b"", b""),
             (self.reg, "bar"),
         ]
         self.handle(
@@ -273,7 +276,7 @@ class TestBadInput(CiTestCase):
         Register with repos that are not in the format of a list
         """
         m_sman_cli.side_effect = [
-            subp.ProcessExecutionError,
+            subp.ProcessExecutionError(b"", b""),
             (self.reg, "bar"),
         ]
         self.handle(
@@ -296,7 +299,7 @@ class TestBadInput(CiTestCase):
         Attempt to register with a key that we don't know
         """
         m_sman_cli.side_effect = [
-            subp.ProcessExecutionError,
+            subp.ProcessExecutionError(b"", b""),
             (self.reg, "bar"),
         ]
         self.handle(self.name, self.config_badkey, self.cloud_init, self.args)

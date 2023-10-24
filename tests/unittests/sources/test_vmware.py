@@ -427,7 +427,7 @@ class TestDataSourceVMwareGuestInfo(FilesystemMockingTestCase):
     ):
         m_which_fn.side_effect = ["vmtoolsd", "vmware-rpctool"]
         m_exec_vmware_rpctool_fn.side_effect = ProcessExecutionError(
-            exit_code=1
+            b"", b"", exit_code=1
         )
         m_fn.side_effect = [VMW_METADATA_YAML, "", "", ""]
         self.assert_get_data_ok(m_fn, m_fn_call_count=4)

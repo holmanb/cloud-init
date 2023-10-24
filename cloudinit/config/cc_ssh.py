@@ -304,7 +304,7 @@ def handle(name: str, cfg: Config, cloud: Cloud, args: list) -> None:
                         os.chmod(keyfile, permissions_private)
                         os.chmod(f"{keyfile}.pub", 0o644)
                 except subp.ProcessExecutionError as e:
-                    err = util.decode_binary(e.stderr).lower()
+                    err = e.stderr.decode().lower()
                     if e.exit_code == 1 and err.lower().startswith(
                         "unknown key"
                     ):

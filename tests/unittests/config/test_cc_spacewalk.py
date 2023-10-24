@@ -20,7 +20,9 @@ class TestSpacewalk(helpers.TestCase):
 
     @mock.patch("cloudinit.config.cc_spacewalk.subp.subp")
     def test_not_is_registered(self, mock_subp):
-        mock_subp.side_effect = subp.ProcessExecutionError(exit_code=1)
+        mock_subp.side_effect = subp.ProcessExecutionError(
+            b"", b"", exit_code=1
+        )
         self.assertFalse(cc_spacewalk.is_registered())
 
     @mock.patch("cloudinit.config.cc_spacewalk.subp.subp")

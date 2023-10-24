@@ -480,7 +480,7 @@ class TestTransportVmwareGuestinfo(CiTestCase):
         """If vmware-rpctool exits 1, then must return not found."""
         m_which.side_effect = [None, self.rpctool_path]
         m_subp.side_effect = subp.ProcessExecutionError(
-            stdout="", stderr="No value found", exit_code=1, cmd=["unused"]
+            stdout=b"", stderr=b"No value found", exit_code=1, cmd=["unused"]
         )
         self.assertEqual(NOT_FOUND, dsovf.transport_vmware_guestinfo())
         self.assertEqual(1, m_subp.call_count)
@@ -506,7 +506,7 @@ class TestTransportVmwareGuestinfo(CiTestCase):
         """If vmware-rpctool exits non zero or 1, warnings should be logged."""
         m_which.side_effect = [None, self.rpctool_path]
         m_subp.side_effect = subp.ProcessExecutionError(
-            stdout=None, stderr="No value found", exit_code=2, cmd=["unused"]
+            stdout=b"", stderr=b"No value found", exit_code=2, cmd=["unused"]
         )
         self.assertEqual(NOT_FOUND, dsovf.transport_vmware_guestinfo())
         self.assertEqual(1, m_subp.call_count)
@@ -529,10 +529,16 @@ class TestTransportVmwareGuestinfo(CiTestCase):
         m_which.side_effect = [self.vmtoolsd_path, self.rpctool_path]
         m_subp.side_effect = [
             subp.ProcessExecutionError(
-                stdout="", stderr="No value found", exit_code=1, cmd=["unused"]
+                stdout=b"",
+                stderr=b"No value found",
+                exit_code=1,
+                cmd=["unused"],
             ),
             subp.ProcessExecutionError(
-                stdout="", stderr="No value found", exit_code=1, cmd=["unused"]
+                stdout=b"",
+                stderr=b"No value found",
+                exit_code=1,
+                cmd=["unused"],
             ),
         ]
         self.assertEqual(NOT_FOUND, dsovf.transport_vmware_guestinfo())
@@ -543,7 +549,10 @@ class TestTransportVmwareGuestinfo(CiTestCase):
         m_which.side_effect = [self.vmtoolsd_path, self.rpctool_path]
         m_subp.side_effect = [
             subp.ProcessExecutionError(
-                stdout="", stderr="No value found", exit_code=1, cmd=["unused"]
+                stdout=b"",
+                stderr=b"No value found",
+                exit_code=1,
+                cmd=["unused"],
             ),
             (fill_properties({}), ""),
         ]

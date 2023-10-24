@@ -81,7 +81,10 @@ class TestNetInfo:
         """netdev_pformat properly rendering ip route info (non json)."""
         m_subp.return_value = (resource, "")
         if not is_json:
-            m_subp.side_effect = [subp.ProcessExecutionError, (resource, "")]
+            m_subp.side_effect = [
+                subp.ProcessExecutionError(b"", b""),
+                (resource, ""),
+            ]
         m_which.side_effect = lambda x: x if x == "ip" else None
         content = netdev_pformat()
         new_output = copy(NETDEV_FORMATTED_OUT)
@@ -147,7 +150,7 @@ class TestNetInfo:
         m_subp.return_value = (readResource(resource), "")
         if not is_json:
             m_subp.side_effect = [
-                subp.ProcessExecutionError,
+                subp.ProcessExecutionError(b"", b""),
                 (readResource(resource), ""),
             ]
         m_which.side_effect = lambda x: x if x == "ip" else None

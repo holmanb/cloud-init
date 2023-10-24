@@ -117,7 +117,8 @@ def _can_skip_resize_ufs(mount_point, devpth):
     try:
         subp.subp(["growfs", "-N", devpth])
     except subp.ProcessExecutionError as e:
-        if e.stderr.startswith(skip_start) and skip_contain in e.stderr:
+        stderr = e.stderr.decode()
+        if stderr.startswith(skip_start) and skip_contain in stderr:
             # This FS is already at the desired size
             return True
         else:

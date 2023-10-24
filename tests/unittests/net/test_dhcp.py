@@ -376,7 +376,7 @@ class TestDHCPDiscoveryClean(CiTestCase):
         """Log and do nothing when nic is absent and no fallback is found."""
         m_subp.side_effect = [
             ("", ""),
-            subp.ProcessExecutionError(exit_code=-5),
+            subp.ProcessExecutionError(b"", b"", exit_code=-5),
         ]
 
         with pytest.raises(NoDHCPLeaseError):
@@ -395,7 +395,7 @@ class TestDHCPDiscoveryClean(CiTestCase):
         """Log and do nothing when nic is absent and no fallback is found."""
         m_subp.side_effect = [
             ("", ""),
-            subp.ProcessExecutionError(exit_code=-5),
+            subp.ProcessExecutionError(b"", b"", exit_code=-5),
         ]
 
         m_which.side_effect = [False, True]

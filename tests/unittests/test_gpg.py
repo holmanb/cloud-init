@@ -41,7 +41,7 @@ class TestGPGCommands:
         internally.
         """
         with mock.patch.object(
-            subp, "subp", side_effect=subp.ProcessExecutionError
+            subp, "subp", side_effect=subp.ProcessExecutionError(b"", b"")
         ):
             with pytest.raises(subp.ProcessExecutionError):
                 gpg.dearmor("garbage key value")
@@ -95,7 +95,7 @@ class TestGPGCommands:
             """retry should be done on gpg receive keys failure."""
             retries = (1, 2, 4)
             my_exc = subp.ProcessExecutionError(
-                stdout="", stderr="", exit_code=2, cmd=["mycmd"]
+                stdout=b"", stderr=b"", exit_code=2, cmd=["mycmd"]
             )
             m_subp.side_effect = (my_exc, my_exc, ("", ""))
             gpg.recv_key("ABCD", "keyserver.example.com", retries=retries)
@@ -108,7 +108,7 @@ class TestGPGCommands:
             naplen = 1
             keyid, keyserver = ("ABCD", "keyserver.example.com")
             m_subp.side_effect = subp.ProcessExecutionError(
-                stdout="", stderr="", exit_code=2, cmd=["mycmd"]
+                stdout=b"", stderr=b"", exit_code=2, cmd=["mycmd"]
             )
             with self.assertRaises(ValueError) as rcm:
                 gpg.recv_key(keyid, keyserver, retries=(naplen,))
@@ -119,7 +119,7 @@ class TestGPGCommands:
         def test_no_retries_on_none(self, m_subp, m_sleep):
             """retry should not be done if retries is None."""
             m_subp.side_effect = subp.ProcessExecutionError(
-                stdout="", stderr="", exit_code=2, cmd=["mycmd"]
+                stdout=b"", stderr=b"", exit_code=2, cmd=["mycmd"]
             )
             with self.assertRaises(ValueError):
                 gpg.recv_key("ABCD", "keyserver.example.com", retries=None)

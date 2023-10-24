@@ -880,7 +880,7 @@ class TestEphemeralIPV4Network(CiTestCase):
 
         def side_effect(args, **kwargs):
             if "append" in args and "3.3.3.3/32" in args:
-                raise subp.ProcessExecutionError("oh no!")
+                raise subp.ProcessExecutionError(b"oh no!", b"")
 
         m_subp.side_effect = side_effect
 
@@ -974,7 +974,7 @@ class TestEphemeralIPV4Network(CiTestCase):
             "broadcast": "192.168.2.255",
         }
         m_subp.side_effect = ProcessExecutionError(
-            "", "RTNETLINK answers: File exists", 2
+            b"", b"RTNETLINK answers: File exists", 2
         )
         expected_calls = [
             mock.call(
@@ -1761,14 +1761,14 @@ class TestGetOVSInternalInterfaces:
     def test_database_connection_error_handled_gracefully(self, m_subp):
         """Test that the error indicating OVS is down is handled gracefully."""
         m_subp.side_effect = ProcessExecutionError(
-            stderr="database connection failed"
+            b"", stderr=b"database connection failed"
         )
 
         assert [] == net.get_ovs_internal_interfaces()
 
     def test_other_errors_raised(self, m_subp):
         """Test that only database connection errors are handled."""
-        m_subp.side_effect = ProcessExecutionError()
+        m_subp.side_effect = ProcessExecutionError(b"", b"")
 
         with pytest.raises(ProcessExecutionError):
             net.get_ovs_internal_interfaces()

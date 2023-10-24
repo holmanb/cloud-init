@@ -1579,7 +1579,7 @@ class TestGetAptCfg:
             pytest.param(
                 [
                     subp.ProcessExecutionError(
-                        "No such file or directory 'apt-config'"
+                        b"", b"No such file or directory 'apt-config'"
                     )
                 ],
                 {

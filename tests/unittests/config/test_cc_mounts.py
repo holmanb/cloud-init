@@ -527,7 +527,7 @@ class TestCreateSwapfile:
         def subp_side_effect(cmd, *args, **kwargs):
             # Mock fallocate failing, to initiate fallback
             if cmd[0] == "fallocate":
-                raise ProcessExecutionError()
+                raise ProcessExecutionError(b"", b"")
 
         m_subp.side_effect = subp_side_effect
         # Use ext4 so both fallocate and dd are valid swap creation methods

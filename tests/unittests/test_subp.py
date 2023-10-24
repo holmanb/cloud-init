@@ -236,18 +236,18 @@ class TestSubp(CiTestCase):
         self.assertIsNone(out)
 
     def test_exception_has_out_err_are_bytes_if_decode_false(self):
-        """Raised exc should have stderr, stdout as bytes if no decode."""
+        """Raised exc should always have stderr, stdout as bytes."""
         with self.assertRaises(subp.ProcessExecutionError) as cm:
             subp.subp([BOGUS_COMMAND], decode=False)
         self.assertTrue(isinstance(cm.exception.stdout, bytes))
         self.assertTrue(isinstance(cm.exception.stderr, bytes))
 
     def test_exception_has_out_err_are_bytes_if_decode_true(self):
-        """Raised exc should have stderr, stdout as string if no decode."""
+        """Raised exc should always have stderr, stdout as bytes."""
         with self.assertRaises(subp.ProcessExecutionError) as cm:
-            subp.subp([BOGUS_COMMAND], decode=True)
-        self.assertTrue(isinstance(cm.exception.stdout, str))
-        self.assertTrue(isinstance(cm.exception.stderr, str))
+            subp.subp([BOGUS_COMMAND])
+        self.assertTrue(isinstance(cm.exception.stdout, bytes))
+        self.assertTrue(isinstance(cm.exception.stderr, bytes))
 
     def test_bunch_of_slashes_in_path(self):
         self.assertEqual(

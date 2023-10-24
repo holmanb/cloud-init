@@ -19,8 +19,8 @@ from tests.unittests.helpers import mock, skipUnlessJsonSchema
 MPATH = "cloudinit.config.cc_ubuntu_drivers."
 M_TMP_PATH = MPATH + "temp_utils.mkdtemp"
 OLD_UBUNTU_DRIVERS_ERROR_STDERR = (
-    "ubuntu-drivers: error: argument <command>: invalid choice: 'install' "
-    "(choose from 'list', 'autoinstall', 'devices', 'debug')\n"
+    b"ubuntu-drivers: error: argument <command>: invalid choice: 'install' "
+    b"(choose from 'list', 'autoinstall', 'devices', 'debug')\n"
 )
 
 
@@ -118,7 +118,7 @@ class TestUbuntuDrivers:
         myCloud = mock.MagicMock()
 
         m_subp.side_effect = ProcessExecutionError(
-            stdout="No drivers found for installation.\n", exit_code=1
+            stdout=b"No drivers found for installation.\n", exit_code=1
         )
 
         with pytest.raises(Exception):

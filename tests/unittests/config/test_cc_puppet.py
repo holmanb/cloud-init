@@ -59,7 +59,7 @@ class TestManagePuppetServices(CiTestCase):
         self.assertIn(expected_calls, m_subp.call_args_list)
 
     def test_enable_fallback_on_failure(self, m_subp):
-        m_subp.side_effect = (ProcessExecutionError, 0)
+        m_subp.side_effect = (ProcessExecutionError(b"", b""), 0)
         cc_puppet._manage_puppet_services(self.cloud, "enable")
         expected_calls = [
             mock.call(
@@ -424,7 +424,7 @@ class TestPuppetHandle(CiTestCase):
             "tests.unittests.util.MockDistro.install_packages"
         ) as install_pkg:
             # puppet-agent not installed, but puppet is
-            install_pkg.side_effect = (ProcessExecutionError, 0)
+            install_pkg.side_effect = (ProcessExecutionError(b"", b""), 0)
             with pytest.raises(ProcessExecutionError):
                 cc_puppet.handle("notimportant", cfg, self.cloud, None)
             self.assertEqual(0, m_man_puppet.call_count)

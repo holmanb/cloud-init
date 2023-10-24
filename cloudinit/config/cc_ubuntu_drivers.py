@@ -129,12 +129,12 @@ def install_drivers(cfg, pkg_install_func, distro: Distro):
     try:
         subp.subp(["ubuntu-drivers", "install", "--gpgpu", driver_arg])
     except subp.ProcessExecutionError as exc:
-        if OLD_UBUNTU_DRIVERS_STDERR_NEEDLE in exc.stderr:
+        if OLD_UBUNTU_DRIVERS_STDERR_NEEDLE in exc.stderr.decode():
             LOG.warning(
                 "the available version of ubuntu-drivers is"
                 " too old to perform requested driver installation"
             )
-        elif "No drivers found for installation." in exc.stdout:
+        elif "No drivers found for installation." in exc.stdout.decode():
             LOG.warning("ubuntu-drivers found no drivers for installation")
         raise
 

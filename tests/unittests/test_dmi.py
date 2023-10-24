@@ -39,7 +39,7 @@ class TestReadDMIData(helpers.FilesystemMockingTestCase):
 
         def _dmidecode_subp(cmd):
             if cmd[-1] != key:
-                raise subp.ProcessExecutionError()
+                raise subp.ProcessExecutionError(b"", b"")
             return (content, error)
 
         self.patched_funcs.enter_context(
@@ -57,7 +57,7 @@ class TestReadDMIData(helpers.FilesystemMockingTestCase):
 
         def _kenv_subp(cmd):
             if cmd[-1] != dmi.DMIDECODE_TO_KERNEL[key].freebsd:
-                raise subp.ProcessExecutionError()
+                raise subp.ProcessExecutionError(b"", b"")
             return (content, error)
 
         self.patched_funcs.enter_context(

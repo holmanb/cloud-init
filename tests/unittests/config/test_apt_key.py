@@ -68,7 +68,9 @@ class TestAptKey:
         )
         assert file == "/dev/null"
 
-    @mock.patch.object(subp, "subp", side_effect=subp.ProcessExecutionError)
+    @mock.patch.object(
+        subp, "subp", side_effect=subp.ProcessExecutionError(b"", b"")
+    )
     def test_apt_key_add_fail_no_file_name_subproc(self, *args):
         """Verify that bad key value gets handled correctly"""
         self._apt_key_fail_helper()
@@ -118,7 +120,9 @@ class TestAptKey:
         """
         assert not cc_apt_configure.apt_key("list")
 
-    @mock.patch.object(subp, "subp", side_effect=subp.ProcessExecutionError)
+    @mock.patch.object(
+        subp, "subp", side_effect=subp.ProcessExecutionError(b"", b"")
+    )
     @mock.patch.object(os, "listdir", return_value="bad_gpg_key.gpg")
     def test_apt_key_list_fail_bad_key_file(self, *args):
         """Ensure bad gpg key doesn't throw exeption."""

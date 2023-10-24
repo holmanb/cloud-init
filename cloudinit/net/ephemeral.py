@@ -131,7 +131,7 @@ class EphemeralIPv4Network:
         try:
             self.distro.net_ops.add_addr(self.interface, cidr, self.broadcast)
         except subp.ProcessExecutionError as e:
-            if "File exists" not in str(e.stderr):
+            if "File exists" not in e.stderr.decode():
                 raise
             LOG.debug(
                 "Skip ephemeral network setup, %s already has address %s",

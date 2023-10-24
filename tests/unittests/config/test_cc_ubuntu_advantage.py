@@ -72,7 +72,7 @@ class TestConfigureUA:
     def test_configure_ua_attach_error(self, m_subp):
         """Errors from pro attach command are raised."""
         m_subp.side_effect = subp.ProcessExecutionError(
-            "Invalid token SomeToken"
+            b"Invalid token SomeToken"
         )
         match = (
             "Failure attaching Ubuntu Advantage:\nUnexpected error while"
@@ -1038,7 +1038,7 @@ class TestHandle:
             }
         }
         m_subp.side_effect = subp.ProcessExecutionError(
-            'Failure enabling "http_proxy"'
+            b'Failure enabling "http_proxy"'
         )
         with pytest.raises(
             ValueError,
@@ -1377,7 +1377,7 @@ class TestSetUAConfig:
         }
         # Simulate UA error
         m_subp.side_effect = subp.ProcessExecutionError(
-            "Invalid proxy: https://user:pass@some-proxy:8088"
+            b"Invalid proxy: https://user:pass@some-proxy:8088"
         )
         with pytest.raises(
             RuntimeError,
@@ -1396,7 +1396,7 @@ class TestSetUAConfig:
         ua_config = {"https_proxy": None}
         # Simulate UA error
         m_subp.side_effect = subp.ProcessExecutionError(
-            "Error unsetting https_proxy"
+            b"Error unsetting https_proxy"
         )
         with pytest.raises(
             RuntimeError,

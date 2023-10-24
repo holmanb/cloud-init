@@ -62,7 +62,7 @@ class TestPackageCommand:
     def test_lock_exception_wait(self, m_sleep, m_apt_avail, m_subp, m_which):
         apt = Apt(runner=mock.Mock(), apt_get_wrapper_command=("dontcare",))
         exception = subp.ProcessExecutionError(
-            exit_code=100, stderr="Could not get apt lock"
+            stdout=b"", exit_code=100, stderr=b"Could not get apt lock"
         )
         m_subp.side_effect = [exception, exception, "return_thing"]
         ret = apt._wait_for_apt_command("stub", {"args": "stub2"})
@@ -82,7 +82,7 @@ class TestPackageCommand:
     ):
         apt = Apt(runner=mock.Mock(), apt_get_wrapper_command=("dontcare",))
         m_subp.side_effect = subp.ProcessExecutionError(
-            exit_code=100, stderr="Could not get apt lock"
+            b"", exit_code=100, stderr=b"Could not get apt lock"
         )
         with pytest.raises(TimeoutError):
             apt._wait_for_apt_command("stub", {"args": "stub2"}, timeout=5)

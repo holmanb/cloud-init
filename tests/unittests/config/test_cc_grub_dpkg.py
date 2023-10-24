@@ -24,7 +24,7 @@ class TestFetchIdevs:
         [
             # Inside a container, grub not installed
             (
-                ProcessExecutionError(reason=FileNotFoundError()),
+                ProcessExecutionError(b"", b"", reason=FileNotFoundError()),
                 False,
                 mock.call("'grub-probe' not found in $PATH"),
                 "",
@@ -33,7 +33,9 @@ class TestFetchIdevs:
             ),
             # Inside a container, grub installed
             (
-                ProcessExecutionError(stderr="failed to get canonical path"),
+                ProcessExecutionError(
+                    stdout=b"", stderr=b"failed to get canonical path"
+                ),
                 False,
                 mock.call("grub-probe 'failed to get canonical path'"),
                 "",

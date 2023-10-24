@@ -253,9 +253,11 @@ class SubscriptionManager:
             try:
                 return_out = _sub_man_cli(cmd, logstring_val=True)[0]
             except subp.ProcessExecutionError as e:
-                if e.stdout == "":
+                if e.stdout == b"":
                     self.log_warn(
-                        "Registration failed due to: {0}".format(e.stderr)
+                        "Registration failed due to: {0}".format(
+                            e.stderr.decode()
+                        )
                     )
                 return False
 
@@ -280,9 +282,11 @@ class SubscriptionManager:
             try:
                 return_out = _sub_man_cli(cmd, logstring_val=True)[0]
             except subp.ProcessExecutionError as e:
-                if e.stdout == "":
+                if e.stdout == b"":
                     self.log_warn(
-                        "Registration failed due to: {0}".format(e.stderr)
+                        "Registration failed due to: {0}".format(
+                            e.stderr.decode()
+                        )
                     )
                 return False
 
@@ -310,13 +314,13 @@ class SubscriptionManager:
             return_out = _sub_man_cli(cmd)[0]
         except subp.ProcessExecutionError as e:
             if e.stdout.rstrip() != "":
-                for line in e.stdout.split("\n"):
+                for line in e.stdout.decode().split("\n"):
                     if line != "":
                         self.log_warn(line)
             else:
                 self.log_warn(
                     "Setting the service level failed with: {0}".format(
-                        e.stderr.strip()
+                        e.stderr.decode().strip()
                     )
                 )
             return False

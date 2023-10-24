@@ -7,7 +7,7 @@ import os
 import subprocess
 from errno import ENOEXEC
 from io import TextIOWrapper
-from typing import List, Union
+from typing import List, Optional, Union
 
 LOG = logging.getLogger(__name__)
 
@@ -78,68 +78,47 @@ class ProcessExecutionError(IOError):
 
     def __init__(
         self,
-        stdout=None,
-        stderr=None,
-        exit_code=None,
-        cmd=None,
-        description=None,
-        reason=None,
-        errno=None,
+        stdout: Optional[bytes] = None,
+        stderr: Optional[bytes] = None,
+        exit_code: Optional[int] = None,
+        cmd: Optional[bytes] = None,
+        description: Optional[str] = None,
+        reason: Optional[str] = None,
+        errno: Optional[int] = None,
     ):
         self.cmd = cmd or self.empty_attr
-
-        if description:
-            self.description = description
-        elif not exit_code and errno == ENOEXEC:
-            self.description = "Exec format error. Missing #! in script?"
-        else:
-            self.description = "Unexpected error while running command."
-
-        self.exit_code = (
-            exit_code if isinstance(exit_code, int) else self.empty_attr
-        )
-
-        if not stderr:
-            self.stderr = self.empty_attr if stderr is None else stderr
-        else:
-            self.stderr = self._indent_text(stderr)
-
-        if not stdout:
-            self.stdout = self.empty_attr if stdout is None else stdout
-        else:
-            self.stdout = self._indent_text(stdout)
-
         self.reason = reason or self.empty_attr
+        self.description = (
+            description or "Unexpected error while running command."
+        )
+        if errno == ENOEXEC:
+            self.description = "Exec format error. Missing #! in script?"
 
-        if errno:
-            self.errno = errno
+        self.stdout = self._indent_text(stdout)
+        self.stderr = self._indent_text(stderr)
+
+        rc = errno or exit_code or 0
+        self.errno = rc
+        self.exit_code = rc
         message = self.MESSAGE_TMPL % {
-            "description": self._ensure_string(self.description),
-            "cmd": self._ensure_string(self.cmd),
-            "exit_code": self._ensure_string(self.exit_code),
-            "stdout": self._ensure_string(self.stdout),
-            "stderr": self._ensure_string(self.stderr),
-            "reason": self._ensure_string(self.reason),
+            "description": self.description,
+            "cmd": self.cmd,
+            "exit_code": rc,
+            "stdout": self.stdout.decode(),
+            "stderr": self.stderr.decode(),
+            "reason": self.reason,
         }
         IOError.__init__(self, message)
 
-    def _ensure_string(self, text):
-        """
-        if data is bytes object, decode
-        """
-        return text.decode() if isinstance(text, bytes) else text
-
-    def _indent_text(
-        self, text: Union[str, bytes], indent_level=8
-    ) -> Union[str, bytes]:
+    def _indent_text(self, text: Optional[bytes], indent_level=8) -> bytes:
         """
         indent text on all but the first line, allowing for easy to read output
 
         remove any newlines at end of text first to prevent unneeded blank
         line in output
         """
-        if not isinstance(text, bytes):
-            return text.rstrip("\n").replace("\n", "\n" + " " * indent_level)
+        if text is None:
+            return self.empty_attr.encode()
         return text.rstrip(b"\n").replace(b"\n", b"\n" + b" " * indent_level)
 
 
@@ -238,9 +217,7 @@ def subp(
     if isinstance(args, str):
         args = args.encode("utf-8")
     elif isinstance(args, list):
-        args = [
-            x if isinstance(x, bytes) else x.encode("utf-8") for x in args
-        ]
+        args = [x if isinstance(x, bytes) else x.encode("utf-8") for x in args]
     try:
         sp = subprocess.Popen(
             args,
@@ -255,23 +232,22 @@ def subp(
     except OSError as e:
         raise ProcessExecutionError(
             cmd=args,
-            reason=e,
+            reason=str(e),
             errno=e.errno,
-            stdout="-" if decode else b"-",
-            stderr="-" if decode else b"-",
         ) from e
+    rc = sp.returncode
+    if rc not in rcs:
+        raise ProcessExecutionError(
+            stdout=out, stderr=err, exit_code=rc, cmd=args
+        )
     if decode:
+
         def ldecode(data, m="utf-8"):
             return data.decode(m, decode) if isinstance(data, bytes) else data
 
         out = ldecode(out)
         err = ldecode(err)
 
-    rc = sp.returncode
-    if rc not in rcs:
-        raise ProcessExecutionError(
-            stdout=out, stderr=err, exit_code=rc, cmd=args
-        )
     return SubpResult(out, err)
 
 

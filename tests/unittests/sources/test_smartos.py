@@ -727,7 +727,9 @@ class TestIdentifyFile(CiTestCase):
     @mock.patch(DSMOS + ".subp.subp")
     def test_returns_none_on_error(self, m_subp):
         """On 'file' execution error, None should be returned."""
-        m_subp.side_effect = ProcessExecutionError("FILE_FAILED", exit_code=99)
+        m_subp.side_effect = ProcessExecutionError(
+            b"FILE_FAILED", b"", exit_code=99
+        )
         fname = self.tmp_path("myfile")
         write_file(fname, "plain text content here\n")
         self.assertEqual(None, identify_file(fname))

@@ -208,7 +208,8 @@ class TestRbxDataSource(CiTestCase):
         )
 
     @mock.patch(
-        DS_PATH + ".subp.subp", side_effect=subp.ProcessExecutionError()
+        DS_PATH + ".subp.subp",
+        side_effect=subp.ProcessExecutionError(b"", b""),
     )
     def test_continue_on_arping_error(self, m_subp):
         """Continue when command error"""

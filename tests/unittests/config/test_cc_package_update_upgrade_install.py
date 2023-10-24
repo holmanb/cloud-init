@@ -137,8 +137,8 @@ class TestMultiplePackageManagers:
             if "args" in kwargs and "install" in kwargs["args"]:
                 raise subp.ProcessExecutionError(
                     cmd=kwargs["args"],
-                    stdout="dontcare",
-                    stderr="E: Unable to locate package pkg1",
+                    stdout=b"dontcare",
+                    stderr=b"E: Unable to locate package pkg1",
                     exit_code=100,
                 )
 
@@ -161,8 +161,8 @@ class TestMultiplePackageManagers:
                 if "install" in args[0]:
                     raise subp.ProcessExecutionError(
                         cmd=args[0],
-                        stdout="dontcare",
-                        stderr='error: snap "pkg1" not found',
+                        stdout=b"dontcare",
+                        stderr=b'error: snap "pkg1" not found',
                         exit_code=1,
                     )
 
