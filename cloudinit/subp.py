@@ -144,7 +144,7 @@ class ProcessExecutionError(IOError):
 
 
 def subp(
-    args,
+    args: Union[bytes, str, List[str], List[bytes]],
     *,
     data=None,
     rcs=None,
@@ -248,18 +248,15 @@ def subp(
     # Popen converts entries in the arguments array from non-bytes to bytes.
     # When locale is unset it may use ascii for that encoding which can
     # cause UnicodeDecodeErrors. (LP: #1751051)
-    bytes_args: Union[bytes, List[bytes]]
-    if isinstance(args, bytes):
-        bytes_args = args
-    elif isinstance(args, str):
-        bytes_args = args.encode("utf-8")
-    else:
-        bytes_args = [
+    if isinstance(args, str):
+        args = args.encode("utf-8")
+    elif isinstance(args, list):
+        args = [
             x if isinstance(x, bytes) else x.encode("utf-8") for x in args
         ]
     try:
         sp = subprocess.Popen(
-            bytes_args,
+            args,
             stdout=stdout,
             stderr=stderr,
             stdin=stdin,

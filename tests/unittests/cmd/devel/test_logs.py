@@ -221,7 +221,7 @@ class TestCollectLogs:
                 ["ls", "/nonexistent-directory"],
                 (
                     "Unexpected error while running command.\n"
-                    "Command: ['ls', '/nonexistent-directory']\n"
+                    "Command: [b'ls', b'/nonexistent-directory']\n"
                     "Exit code: 2\n"
                     "Reason: -\n"
                     "Stdout: \n"
