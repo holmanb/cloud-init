@@ -855,6 +855,16 @@ def add_apt_sources(
 
 def convert_v1_to_v2_apt_format(srclist):
     """convert v1 apt format to v2 (dict in apt_sources)"""
+
+    def rand_dict_key(dictionary, postfix=None):
+        if not postfix:
+            postfix = ""
+        while True:
+            newkey = util.rand_str(strlen=8) + "_" + postfix
+            if newkey not in dictionary:
+                break
+        return newkey
+
     srcdict = {}
     util.deprecate(
         deprecated="Config key 'apt_sources'",
@@ -868,7 +878,7 @@ def convert_v1_to_v2_apt_format(srclist):
                 # file collides for multiple !filename cases for compatibility
                 # yet we need them all processed, so not same dictionary key
                 srcent["filename"] = "cloud_config_sources.list"
-                key = util.rand_dict_key(srcdict, "cloud_config_sources.list")
+                key = rand_dict_key(srcdict, "cloud_config_sources.list")
             else:
                 # all with filename use that as key (matching new format)
                 key = srcent["filename"]

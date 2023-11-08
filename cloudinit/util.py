@@ -75,8 +75,8 @@ FN_REPLACEMENTS = {
 }
 FN_ALLOWED = "_-.()" + string.digits + string.ascii_letters
 
-TRUE_STRINGS = ("true", "1", "on", "yes")
-FALSE_STRINGS = ("off", "0", "no", "false")
+TRUE_STRINGS = ["true", "1", "on", "yes"]
+FALSE_STRINGS = ["off", "0", "no", "false"]
 
 
 def kernel_version():
@@ -250,36 +250,15 @@ def fork_cb(child_cb, *args, **kwargs):
         )
 
 
-def is_true(val, addons=None):
-    if isinstance(val, (bool)):
-        return val is True
-    check_set = TRUE_STRINGS
-    if addons:
-        check_set = list(check_set) + addons
-    if str(val).lower().strip() in check_set:
-        return True
-    return False
+def is_true(val, addons=None) -> bool:
+    return str(val).lower().strip() in TRUE_STRINGS + (addons or []) or bool(val)
 
 
-def is_false(val, addons=None):
-    if isinstance(val, (bool)):
-        return val is False
-    check_set = FALSE_STRINGS
-    if addons:
-        check_set = list(check_set) + addons
-    if str(val).lower().strip() in check_set:
-        return True
-    return False
+def is_false(val, addons=None) -> bool:
+    return str(val).lower().strip() in FALSE_STRINGS + (addons or []) or bool(val)
 
 
 def translate_bool(val, addons=None):
-    if not val:
-        # This handles empty lists and false and
-        # other things that python believes are false
-        return False
-    # If its already a boolean skip
-    if isinstance(val, (bool)):
-        return val
     return is_true(val, addons)
 
 
@@ -287,17 +266,7 @@ def rand_str(strlen=32, select_from=None):
     r = random.SystemRandom()
     if not select_from:
         select_from = string.ascii_letters + string.digits
-    return "".join([r.choice(select_from) for _x in range(0, strlen)])
-
-
-def rand_dict_key(dictionary, postfix=None):
-    if not postfix:
-        postfix = ""
-    while True:
-        newkey = rand_str(strlen=8) + "_" + postfix
-        if newkey not in dictionary:
-            break
-    return newkey
+    return "".join([r.choice(select_from) for _x in range(strlen)])
 
 
 def read_conf(fname, *, instance_data_file=None) -> Dict:
@@ -350,7 +319,7 @@ def read_conf(fname, *, instance_data_file=None) -> Dict:
 # Merges X lists, and then keeps the
 # unique ones, but orders by sort order
 # instead of by the original order
-def uniq_merge_sorted(*lists):
+def uniq_merge_sorted(*lists: list):
     return sorted(uniq_merge(*lists))
 
 
@@ -362,7 +331,7 @@ def uniq_merge_sorted(*lists):
 # Note: if any entry is a string it will be
 # split on commas and empty entries will be
 # evicted and merged in accordingly.
-def uniq_merge(*lists):
+def uniq_merge(*lists: list):
     combined_list = []
     for a_list in lists:
         if isinstance(a_list, str):
