@@ -146,11 +146,6 @@ INITSYS_FILES = {
         )
         if (is_f(f) and not is_generator(f))
     ],
-    "systemd.generators": lambda: [
-        render_tmpl(f, mode=0o755)
-        for f in glob("systemd/*")
-        if is_f(f) and is_generator(f)
-    ],
 }
 INITSYS_ROOTS = {
     "sysvinit": "etc/rc.d/init.d",
@@ -159,9 +154,6 @@ INITSYS_ROOTS = {
     "sysvinit_deb": "etc/init.d",
     "sysvinit_openrc": "etc/init.d",
     "systemd": pkg_config_read("systemd", "systemdsystemunitdir"),
-    "systemd.generators": pkg_config_read(
-        "systemd", "systemdsystemgeneratordir"
-    ),
 }
 INITSYS_TYPES = sorted([f.partition(".")[0] for f in INITSYS_ROOTS.keys()])
 
@@ -275,6 +267,7 @@ data_files = [
         USR_LIB_EXEC + "/cloud-init",
         [
             "tools/ds-identify",
+            "systemd/cloud-init-generator",
             "tools/hook-hotplug",
             "tools/uncloud-init",
             "tools/write-ssh-key-fingerprints",

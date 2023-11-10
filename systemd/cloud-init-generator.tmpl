@@ -15,11 +15,6 @@ CLOUD_TARGET_NAME="cloud-init.target"
 CONTAINER="${container}"
 
 # start: template section
-{% if variant in ["suse"] %}
-CLOUD_SYSTEM_TARGET="/usr/lib/systemd/system/cloud-init.target"
-{% else %}
-CLOUD_SYSTEM_TARGET="/lib/systemd/system/cloud-init.target"
-{% endif %}
 {% if variant in ["almalinux", "centos", "cloudlinux", "eurolinux", "fedora",
                   "miraclelinux", "openeuler", "OpenCloudOS", "openmandriva", "rhel", "rocky", "TencentOS", "virtuozzo"] %}
     dsidentify="/usr/libexec/cloud-init/ds-identify"
@@ -64,18 +59,15 @@ main() {
     ds=$?
     debug 1 "ds-identify rc=$ds"
 
-    if [ "$ds" = "1" -o "$ds" = "2" ]; then
-        if [ "$ds" = "1" ]; then
-            debug 1 "cloud-init is enabled but no datasource found, disabling"
-        else
-            debug 1 "cloud-init is disabled by kernel commandline or etc_file"
-        fi
+    if [ "$ds" = "1" ]; then
+		debug 1 "cloud-init is enabled but no datasource found, disabling"
         if [ -f "$link_path" ]; then
-            if rm -f "$link_path"; then
-                debug 1 "disabled. removed existing $link_path"
+            if systemctl disable cloud-init.target; then
+                debug 1 "disabled via systemctl enable cloud-init.target"
             else
                 ret=$?
-                debug 0 "[$ret] disable failed, remove $link_path"
+                debug 0 "[$ret] disable failed:" \
+					" systemctl disable cloud-init.target"
             fi
         else
             debug 1 "already disabled: no change needed [no $link_path]"
@@ -92,12 +84,12 @@ main() {
         else
             [ -d "${link_path%/*}" ] || mkdir -p "${link_path%/*}" ||
                 debug 0 "failed to make dir $link_path"
-            if ln -snf "$CLOUD_SYSTEM_TARGET" "$link_path"; then
-                debug 1 "enabled via $link_path -> $CLOUD_SYSTEM_TARGET"
+            if systemctl enable cloud-init.target; then
+                debug 1 "enabled via systemctl enable cloud-init.target"
             else
                 ret=$?
                 debug 0 "[$ret] enable failed:" \
-                    "ln $CLOUD_SYSTEM_TARGET $link_path"
+                    "systemctl enable cloud-init.target"
             fi
         fi
         if [ -e $RUN_DISABLED_FILE ]; then

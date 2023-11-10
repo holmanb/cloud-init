@@ -1,0 +1,19 @@
+[Unit]
+Description=Platform identifier script: ds-identify
+DefaultDependencies=no
+Before=cloud-init-local.service
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/cloud-init/cloud-init-generator
+RemainAfterExit=yes
+
+# Output not needed, and by default systemd orders units after the journal
+# starts. Write stdout to /dev/null so that ds-identify can run before journal.
+StandardOutput=null
+
+[Install]
+WantedBy=cloud-init.target
