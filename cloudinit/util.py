@@ -339,7 +339,7 @@ def uniq_merge(*lists: list):
             # Kickout the empty ones
             a_list = [a for a in a_list if a]
         combined_list.extend(a_list)
-    return uniq_list(combined_list)
+    return list(set(combined_list))
 
 
 def clean_filename(fn):
@@ -1535,16 +1535,6 @@ def blkid(devs=None, disable_cache=False):
     return ret
 
 
-def uniq_list(in_list):
-    out_list = []
-    for i in in_list:
-        if i in out_list:
-            continue
-        else:
-            out_list.append(i)
-    return out_list
-
-
 def load_file(fname, read_cb=None, quiet=False, decode=True):
     LOG.debug("Reading from %s (quiet=%s)", fname, quiet)
     ofh = io.BytesIO()
@@ -1753,11 +1743,9 @@ def hash_blob(blob, routine: str, mlen=None) -> str:
     hasher = hashlib.new(routine)
     hasher.update(encode_text(blob))
     digest = hasher.hexdigest()
-    # Don't get to long now
     if mlen is not None:
         return digest[0:mlen]
-    else:
-        return digest
+    return digest
 
 
 def hash_buffer(f: io.BufferedIOBase) -> bytes:
@@ -1773,19 +1761,13 @@ def hash_buffer(f: io.BufferedIOBase) -> bytes:
 
 
 def is_user(name):
-    try:
-        if pwd.getpwnam(name):
-            return True
-    except KeyError:
-        return False
+    with suppress(KeyError):
+        return pwd.getpwnam(name)
 
 
 def is_group(name):
-    try:
-        if grp.getgrnam(name):
-            return True
-    except KeyError:
-        return False
+    with suppress(KeyError):
+        return grp.getgrnam(name)
 
 
 def rename(src, dest):
@@ -1850,16 +1832,6 @@ def ensure_dir(path, mode=None, user=None, group=None):
         chmod(path, mode)
 
 
-@contextlib.contextmanager
-def unmounter(umount):
-    try:
-        yield umount
-    finally:
-        if umount:
-            umount_cmd = ["umount", umount]
-            subp.subp(umount_cmd)
-
-
 def mounts():
     mounted = {}
     try:
@@ -1916,6 +1888,14 @@ def mount_cb(
     mtype is a filesystem type.  it may be a list, string (a single fsname)
     or a list of fsnames.
     """
+    @contextlib.contextmanager
+    def unmounter(umount):
+        try:
+            yield umount
+        finally:
+            if umount:
+                umount_cmd = ["umount", umount]
+                subp.subp(umount_cmd)
 
     if isinstance(mtype, str):
         mtypes = [mtype]
@@ -1997,11 +1977,6 @@ def mount_cb(
 def get_builtin_cfg():
     # Deep copy so that others can't modify
     return obj_copy.deepcopy(CFG_BUILTIN)
-
-
-def is_link(path):
-    LOG.debug("Testing if a link exists for %s", path)
-    return os.path.islink(path)
 
 
 def sym_link(source, link, force=False):

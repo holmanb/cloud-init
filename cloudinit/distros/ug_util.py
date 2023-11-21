@@ -61,6 +61,32 @@ def _normalize_groups(grp_cfg):
     return groups
 
 
+# Merges X lists, and then keeps the
+# unique ones, but orders by sort order
+# instead of by the original order
+def uniq_merge_sorted(*lists: list):
+    return sorted(uniq_merge(*lists))
+
+
+# Merges X lists and then iterates over those
+# and only keeps the unique items (order preserving)
+# and returns that merged and uniqued list as the
+# final result.
+#
+# Note: if any entry is a string it will be
+# split on commas and empty entries will be
+# evicted and merged in accordingly.
+def uniq_merge(*lists: list):
+    combined_list = []
+    for a_list in lists:
+        if isinstance(a_list, str):
+            a_list = a_list.strip().split(",")
+            # Kickout the empty ones
+            a_list = [a for a in a_list if a]
+        combined_list.extend(a_list)
+    return list(set(combined_list))
+
+
 # Normalizes an input group configuration which can be: a list or a dictionary
 #
 # components that define the user config + 'name' (if a 'name' field does not

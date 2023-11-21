@@ -7,8 +7,9 @@
 # This file is part of cloud-init. See LICENSE file for license information.
 
 import logging
+import os
 
-from cloudinit import distros, helpers, subp, util
+from cloudinit import distros, helpers, subp
 from cloudinit.distros import PackageList, net_util
 from cloudinit.distros.parsers.hostname import HostnameConf
 from cloudinit.settings import PER_INSTANCE
@@ -133,7 +134,7 @@ class Distro(distros.Distro):
     @staticmethod
     def _create_network_symlink(interface_name):
         file_path = "/etc/init.d/net.{name}".format(name=interface_name)
-        if not util.is_link(file_path):
+        if not os.path.islink(file_path):
             util.sym_link("/etc/init.d/net.lo", file_path)
 
     def _bring_up_interface(self, device_name):

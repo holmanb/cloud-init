@@ -20,7 +20,6 @@ from cloudinit.util import (
     del_file,
     error,
     get_config_logfiles,
-    is_link,
     write_file,
 )
 
@@ -138,7 +137,7 @@ def remove_artifacts(remove_logs, remove_seed=False, remove_config=None):
         if path == seed_path and not remove_seed:
             continue
         try:
-            if os.path.isdir(path) and not is_link(path):
+            if os.path.isdir(path) and not os.path.islink(path):
                 del_dir(path)
             else:
                 del_file(path)

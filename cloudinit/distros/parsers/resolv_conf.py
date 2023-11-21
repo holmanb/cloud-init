@@ -84,7 +84,7 @@ class ResolvConf:
         current_ns = self._retr_option("nameserver")
         new_ns = list(current_ns)
         new_ns.append(str(ns))
-        new_ns = util.uniq_list(new_ns)
+        new_ns = list(set(new_ns))
         if len(new_ns) == len(current_ns):
             return current_ns
         self._remove_option("nameserver")
@@ -112,7 +112,7 @@ class ResolvConf:
         flat_sds = self.search_domains
         new_sds = list(flat_sds)
         new_sds.append(str(search_domain))
-        new_sds = util.uniq_list(new_sds)
+        new_sds = list(set(new_sds))
         if len(flat_sds) == len(new_sds):
             return new_sds
         if len(flat_sds) >= 6:

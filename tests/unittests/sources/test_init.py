@@ -759,7 +759,7 @@ class TestDataSource(CiTestCase):
             self.assertEqual("my-cloud\n", util.load_file(cloud_id_link))
             # A symlink with the generic /run/cloud-init/cloud-id
             # link is present
-            self.assertTrue(util.is_link(cloud_id_link))
+            self.assertTrue(os.path.islink(cloud_id_link))
             datasource.persist_instance_data()
             # cloud-id<cloud-type> not deleted: no cloud-id change
             self.assertTrue(os.path.exists(cloud_id_file))
@@ -772,7 +772,7 @@ class TestDataSource(CiTestCase):
         # Previous cloud-id-<cloud-type> file removed
         self.assertFalse(os.path.exists(cloud_id_file))
         # Generic link persisted which contains canonical-cloud-id as content
-        self.assertTrue(util.is_link(cloud_id_link))
+        self.assertTrue(os.path.islink(cloud_id_link))
         self.assertEqual("my-cloud2\n", util.load_file(cloud_id_link))
 
     def test_persist_instance_data_writes_network_json_when_set(self):
