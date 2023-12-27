@@ -9,7 +9,11 @@ import responses
 
 from cloudinit.distros import amazon, centos, debian, freebsd, rhel
 from cloudinit.net.dhcp import (
+<<<<<<< HEAD
     DHCLIENT_FALLBACK_LEASE_DIR,
+=======
+    Dhcpcd,
+>>>>>>> d0c7742c1 (feat(dhcp): Add support for dhcpcd)
     InvalidDHCPLeaseFileError,
     IscDhclient,
     NoDHCPLeaseError,
@@ -1282,3 +1286,28 @@ class TestISCDHClient(CiTestCase):
                 centos.Distro.dhclient_lease_file_regex,
             ),
         )
+class TestDhcpcd:
+    def test_parse_lease(self):
+        lease = dedent(
+            """
+            broadcast_address='192.168.15.255'
+            dhcp_lease_time='3600'
+            dhcp_message_type='5'
+            dhcp_server_identifier='192.168.0.1'
+            domain_name='us-east-2.compute.internal'
+            domain_name_servers='192.168.0.2'
+            host_name='ip-192-168-0-212'
+            interface_mtu='9001'
+            ip_address='192.168.0.212'
+            network_number='192.168.0.0'
+            routers='192.168.0.1'
+            subnet_cidr='20'
+            subnet_mask='255.255.240.0'
+            """
+        )
+        parsed_lease = Dhcpcd.parse_dhcpcd_lease(lease, "eth0")[0]
+        assert "eth0" == parsed_lease["interface"]
+        assert "192.168.15.255" == parsed_lease["broadcast-address"]
+        assert "192.168.0.212" == parsed_lease["fixed-address"]
+        assert "255.255.240.0" == parsed_lease["subnet-mask"]
+        assert "192.168.0.1" == parsed_lease["routers"]
