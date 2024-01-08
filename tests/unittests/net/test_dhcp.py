@@ -440,16 +440,12 @@ class TestDHCPDiscoveryClean(CiTestCase):
             subp.ProcessExecutionError(exit_code=-5),
         ]
 
-        m_which.side_effect = [False, True]
+        m_which.side_effect = [False, False, False]
         with pytest.raises(NoDHCPLeaseError):
             maybe_perform_dhcp_discovery(MockDistro())
 
         self.assertIn(
             "DHCP client not found: dhclient",
-            self.logs.getvalue(),
-        )
-        self.assertIn(
-            "DHCP client not found: dhcpcd",
             self.logs.getvalue(),
         )
 
@@ -475,7 +471,15 @@ class TestDHCPDiscoveryClean(CiTestCase):
             maybe_perform_dhcp_discovery(MockDistro())
 
         self.assertIn(
-            "Skip dhclient configuration: No dhclient command found.",
+            "DHCP client not found: dhclient",
+            self.logs.getvalue(),
+        )
+        self.assertIn(
+            "DHCP client not found: dhcpcd",
+            self.logs.getvalue(),
+        )
+        self.assertIn(
+            "DHCP client not found: udhcpc",
             self.logs.getvalue(),
         )
 
@@ -976,24 +980,6 @@ class TestEphemeralDhcpLeaseErrors:
 class TestUDHCPCDiscoveryClean(CiTestCase):
     with_logs = True
     maxDiff = None
-
-    @mock.patch("cloudinit.net.dhcp.subp.which")
-    @mock.patch("cloudinit.net.dhcp.find_fallback_nic")
-    def test_absent_udhcpc_command(self, m_fallback, m_which):
-        """When dhclient doesn't exist in the OS, log the issue and no-op."""
-        m_fallback.return_value = "eth9"
-        m_which.return_value = None  # udhcpc isn't found
-
-        distro = MockDistro()
-        distro.dhcp_client_priority = [Udhcpc]
-
-        with pytest.raises(NoDHCPLeaseMissingDhclientError):
-            maybe_perform_dhcp_discovery(distro)
-
-        self.assertIn(
-            "Skip udhcpc configuration: No udhcpc command found.",
-            self.logs.getvalue(),
-        )
 
     @mock.patch("cloudinit.net.dhcp.is_ib_interface", return_value=False)
     @mock.patch("cloudinit.net.dhcp.subp.which", return_value="/sbin/udhcpc")

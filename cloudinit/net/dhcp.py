@@ -177,6 +177,11 @@ def networkd_get_option_from_leases(keyname, leases_d=None):
 class DhcpClient(abc.ABC):
     client_name = ""
 
+    def __init__(self):
+        self.dhcp_client_path = subp.which(self.client_name)
+        if not self.dhcp_client_path:
+            raise NoDHCPLeaseMissingDhclientError()
+
     @classmethod
     def kill_dhcp_client(cls):
         subp.subp(["pkill", cls.client_name], rcs=[0, 1])
@@ -201,14 +206,6 @@ class DhcpClient(abc.ABC):
 
 class IscDhclient(DhcpClient):
     client_name = "dhclient"
-
-    def __init__(self):
-        self.dhclient_path = subp.which("dhclient")
-        if not self.dhclient_path:
-            LOG.debug(
-                "Skip dhclient configuration: No dhclient command found."
-            )
-            raise NoDHCPLeaseMissingDhclientError()
 
     @staticmethod
     def parse_dhcp_lease_file(lease_file: str) -> List[Dict[str, Any]]:
@@ -300,7 +297,7 @@ class IscDhclient(DhcpClient):
         try:
             out, err = subp.subp(
                 distro.build_dhclient_cmd(
-                    self.dhclient_path,
+                    self.dhcp_client_path,
                     lease_file,
                     pid_file,
                     interface,
@@ -532,12 +529,6 @@ class Dhcpcd:
 class Udhcpc(DhcpClient):
     client_name = "udhcpc"
 
-    def __init__(self):
-        self.udhcpc_path = subp.which("udhcpc")
-        if not self.udhcpc_path:
-            LOG.debug("Skip udhcpc configuration: No udhcpc command found.")
-            raise NoDHCPLeaseMissingUdhcpcError()
-
     def dhcp_discovery(
         self,
         interface,
@@ -567,7 +558,7 @@ class Udhcpc(DhcpClient):
         util.write_file(udhcpc_script, UDHCPC_SCRIPT, 0o755)
 
         cmd = [
-            self.udhcpc_path,
+            self.dhcp_client_path,
             "-O",
             "staticroutes",
             "-i",
