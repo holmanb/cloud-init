@@ -8,11 +8,7 @@ from functools import partial
 from typing import Any, Callable, Dict, List, Optional
 
 import cloudinit.net as net
-from cloudinit.net.dhcp import (
-    IscDhclient,
-    NoDHCPLeaseError,
-    maybe_perform_dhcp_discovery,
-)
+from cloudinit.net.dhcp import NoDHCPLeaseError, maybe_perform_dhcp_discovery
 from cloudinit.subp import ProcessExecutionError
 
 LOG = logging.getLogger(__name__)
@@ -314,7 +310,9 @@ class EphemeralDHCPv4:
                 kwargs["prefix_or_mask"], kwargs["ip"]
             )
         if kwargs["static_routes"]:
-            kwargs["static_routes"] = IscDhclient.parse_static_routes(
+            kwargs[
+                "static_routes"
+            ] = self.distro.dhcp_client.parse_static_routes(
                 kwargs["static_routes"]
             )
         if self.connectivity_url_data:

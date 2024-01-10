@@ -170,6 +170,7 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
         self.net_ops = iproute2.Iproute2
         self._runner = helpers.Runners(paths)
         self.package_managers: List[PackageManager] = []
+        self._selected_dhcp_client = None
 
     def _unpickle(self, ci_pkl_version: int) -> None:
         """Perform deserialization fixes for Distro."""
@@ -273,6 +274,23 @@ class Distro(persistence.CloudInitPickleMixin, metaclass=abc.ABCMeta):
             "Legacy function '_write_network' was called in distro '%s'.\n"
             "_write_network_config needs implementation.\n" % self.name
         )
+
+    @property
+    def dhcp_client(self) -> dhcp.DhcpClient:
+        """distros set priority list, select based on this order which to use
+
+        If the priority dhcp client isn't found, fall back to lower in list.
+        """
+        if self._selected_dhcp_client:
+            return self._selected_dhcp_client
+        for client in self.dhcp_client_priority:
+            try:
+                self._selected_dhcp_client = client()
+                LOG.debug("DHCP client selected: %s", client.client_name)
+                return self._selected_dhcp_client
+            except (dhcp.NoDHCPLeaseMissingDhclientError,):
+                LOG.warning("DHCP client not found: %s", client.client_name)
+        raise dhcp.NoDHCPLeaseMissingDhclientError()
 
     @property
     def network_activator(self) -> Optional[Type[activators.NetworkActivator]]:

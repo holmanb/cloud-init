@@ -13,7 +13,7 @@ import signal
 import time
 from contextlib import suppress
 from io import StringIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import configobj
 
@@ -89,24 +89,6 @@ class NoDHCPLeaseMissingUdhcpcError(NoDHCPLeaseError):
     """Raised when unable to find udhcpc client."""
 
 
-def select_dhcp_client(distro):
-    """distros set priority list, select based on this order which to use
-
-    If the priority dhcp client isn't found, fall back to lower in list.
-    """
-    for client in distro.dhcp_client_priority:
-        try:
-            dhcp_client = client()
-            LOG.debug("DHCP client selected: %s", client.client_name)
-            return dhcp_client
-        except (
-            NoDHCPLeaseMissingDhclientError,
-            NoDHCPLeaseMissingUdhcpcError,
-        ):
-            LOG.warning("DHCP client not found: %s", client.client_name)
-    raise NoDHCPLeaseMissingDhclientError()
-
-
 def maybe_perform_dhcp_discovery(distro, nic=None, dhcp_log_func=None):
     """Perform dhcp discovery if nic valid and dhclient command exists.
 
@@ -130,8 +112,7 @@ def maybe_perform_dhcp_discovery(distro, nic=None, dhcp_log_func=None):
             "Skip dhcp_discovery: nic %s not found in get_devicelist.", nic
         )
         raise NoDHCPLeaseInterfaceError()
-    client = select_dhcp_client(distro)
-    return client.dhcp_discovery(nic, dhcp_log_func, distro)
+    return distro.dhcp_client.dhcp_discovery(nic, dhcp_log_func, distro)
 
 
 def networkd_parse_lease(content):
@@ -203,6 +184,10 @@ class DhcpClient(abc.ABC):
     @classmethod
     def stop_service(cls, dhcp_interface: str, distro):
         distro.manage_service("stop", cls.client_name, rcs=[0, 1])
+
+    @staticmethod
+    def parse_static_routes(routes: str) -> List[Tuple[str, str]]:
+        return []
 
 
 class IscDhclient(DhcpClient):
@@ -361,7 +346,7 @@ class IscDhclient(DhcpClient):
         return self.parse_dhcp_lease_file(lease_file)
 
     @staticmethod
-    def parse_static_routes(rfc3442):
+    def parse_static_routes(routes: str) -> List[Tuple[str, str]]:
         """
         parse rfc3442 format and return a list containing tuple of strings.
 
@@ -393,9 +378,9 @@ class IscDhclient(DhcpClient):
            /etc/dhcp/dhclient-exit-hooks.d/rfc3442-classless-routes
         """
         # raw strings from dhcp lease may end in semi-colon
-        rfc3442 = rfc3442.rstrip(";")
+        rfc3442 = routes.rstrip(";")
         tokens = [tok for tok in re.split(r"[, .]", rfc3442) if tok]
-        static_routes = []
+        static_routes: List[Tuple[str, str]] = []
 
         def _trunc_error(cidr, required, remain):
             msg = (
@@ -596,19 +581,32 @@ class Dhcpcd(DhcpClient):
         subnet_mask='255.255.240.0'
         """
 
-        # create a dict from dhcpcd dump output
+        # create a dict from dhcpcd dump output - remove single quotes
         lease = dict(
-            [a.split("=") for a in lease_dump.replace("'", "").split()]
+            [
+                a.split("=")
+                for a in lease_dump.strip().replace("'", "").split("\n")
+            ]
         )
 
-        # this name is just different
-        lease["fixed-address"] = lease.pop("ip_address")
-
-        # this is expected by our code, can probably change that at some point
+        # this is expected by cloud-init code, we can probably change that
         lease["interface"] = interface
 
-        # transform underscores to hyphens and return
-        return [{key.replace("_", "-"): value for key, value in lease.items()}]
+        # transform underscores to hyphens
+        lease = {key.replace("_", "-"): value for key, value in lease.items()}
+
+        # map names that are different
+        name_map = {
+            "ip-address": "fixed-address",
+            "classless-static-routes": "static_routes",
+        }
+        for source, destination in name_map.items():
+            if source in lease:
+                lease[destination] = lease.pop(source)
+
+        # nothing ever uses multiple leases in cloud-init codebase but
+        # for compatibility we still expect a list of leases
+        return [lease]
 
     @classmethod
     def parse_dhcp_lease_file(cls, interface) -> List[Dict[str, Any]]:
@@ -641,6 +639,38 @@ class Dhcpcd(DhcpClient):
                 error.stdout,
             )
             raise NoDHCPLeaseError from error
+
+    @staticmethod
+    def parse_static_routes(routes: str) -> List[Tuple[str, str]]:
+        """
+        classless static routes as returnedd from dhcpcd --dumplease and return
+        a list containing tuple of strings.
+
+        The tuple is composed of the network_address (including net length) and
+        gateway for a parsed static route.
+
+        @param routes: string containing classless static routes
+        @returns: list of tuple(str, str) for all valid parsed routes until the
+                  first parsing error.
+
+        e.g.:
+
+        sr=parse_static_routes(
+            "0.0.0.0/0 10.0.0.1 168.63.129.16/32 10.0.0.1"
+        )
+        sr=[
+            ("0.0.0.0/0", "10.0.0.1"),
+            ("169.63.129.16/32", "10.0.0.1"),
+        ]
+        """
+        route_list = routes.split()
+        if not len(route_list) % 2:
+            return [
+                (route_list[i], route_list[i + 1])
+                for i in range(0, len(route_list), 2)
+            ]
+        LOG.warning("Malformed classless static routes: [%s]", routes)
+        return []
 
 
 class Udhcpc(DhcpClient):

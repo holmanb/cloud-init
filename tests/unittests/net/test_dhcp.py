@@ -1305,9 +1305,37 @@ class TestDhcpcd:
             subnet_mask='255.255.240.0'
             """
         )
-        parsed_lease = Dhcpcd.parse_dhcpcd_lease(lease, "eth0")[0]
+        parsed_lease = Dhcpcd.parse_dhcpcd_lease(lease, "eth0").pop()
         assert "eth0" == parsed_lease["interface"]
         assert "192.168.15.255" == parsed_lease["broadcast-address"]
         assert "192.168.0.212" == parsed_lease["fixed-address"]
         assert "255.255.240.0" == parsed_lease["subnet-mask"]
         assert "192.168.0.1" == parsed_lease["routers"]
+
+    def test_parse_classless_static_routes(self):
+        lease = dedent(
+            """
+            broadcast_address='10.0.0.255'
+            classless_static_routes='0.0.0.0/0 10.0.0.1 168.63.129.16/32"""
+            """ 10.0.0.1 169.254.169.254/32 10.0.0.1'
+            dhcp_lease_time='4294967295'
+            dhcp_message_type='5'
+            dhcp_rebinding_time='4294967295'
+            dhcp_renewal_time='4294967295'
+            dhcp_server_identifier='168.63.129.16'
+            domain_name='ilo2tr0xng2exgucxg20yx0tjb.gx.internal.cloudapp.net'
+            domain_name_servers='168.63.129.16'
+            ip_address='10.0.0.5'
+            network_number='10.0.0.0'
+            routers='10.0.0.1'
+            server_name='DSM111070915004'
+            subnet_cidr='24'
+            subnet_mask='255.255.255.0'
+            """
+        )
+        parsed_lease = Dhcpcd.parse_dhcpcd_lease(lease, "eth0").pop()
+        assert [
+            ("0.0.0.0/0", "10.0.0.1"),
+            ("168.63.129.16/32", "10.0.0.1"),
+            ("169.254.169.254/32", "10.0.0.1"),
+        ] == Dhcpcd.parse_static_routes(parsed_lease["static_routes"])
