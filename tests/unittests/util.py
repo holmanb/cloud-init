@@ -2,6 +2,7 @@
 from unittest import mock
 
 from cloudinit import cloud, distros, helpers
+from cloudinit.net.dhcp import IscDhclient
 from cloudinit.sources import DataSource, DataSourceHostname
 from cloudinit.sources.DataSourceNone import DataSourceNone
 
@@ -64,11 +65,18 @@ class DataSourceTesting(DataSourceNone):
 class MockDistro(distros.Distro):
     # MockDistro is here to test base Distro class implementations
     def __init__(self, name="testingdistro", cfg=None, paths=None):
+        self._client = None
         if not cfg:
             cfg = {}
         if not paths:
             paths = {}
         super(MockDistro, self).__init__(name, cfg, paths)
+
+    @property
+    def dhcp_client(self):
+        if not self._client:
+            self._client = IscDhclient()
+        return self._client
 
     def install_packages(self, pkglist):
         pass

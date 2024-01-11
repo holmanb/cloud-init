@@ -57,24 +57,22 @@ class TestCloudStackHostname(CiTestCase):
 
         # Mock cloudinit.net.dhcp.networkd_get_option_from_leases() method \
         # result since we don't have a DHCP client running
-        parse_dhcp_lease_file = mock.MagicMock(
-            return_value=[
-                {
-                    "interface": "eth0",
-                    "fixed-address": "192.168.0.1",
-                    "subnet-mask": "255.255.255.0",
-                    "routers": "192.168.0.1",
-                    "domain-name": self.isc_dhclient_domainname,
-                    "renew": "4 2017/07/27 18:02:30",
-                    "expire": "5 2017/07/28 07:08:15",
-                }
-            ]
+        get_newest_lease = mock.MagicMock(
+            return_value={
+                "interface": "eth0",
+                "fixed-address": "192.168.0.1",
+                "subnet-mask": "255.255.255.0",
+                "routers": "192.168.0.1",
+                "domain-name": self.isc_dhclient_domainname,
+                "renew": "4 2017/07/27 18:02:30",
+                "expire": "5 2017/07/28 07:08:15",
+            }
         )
 
         self.patches.enter_context(
             mock.patch(
-                DHCP_MOD_PATH + ".IscDhclient.parse_dhcp_lease_file",
-                parse_dhcp_lease_file,
+                DHCP_MOD_PATH + ".IscDhclient.get_newest_lease",
+                get_newest_lease,
             )
         )
 
@@ -177,25 +175,23 @@ class TestCloudStackHostname(CiTestCase):
             )
         )
 
-        # Override IscDhclient.parse_dhcp_lease_file()
+        # Override IscDhclient.get_newest_lease()
         # to return a lease without domain-name option.
-        parse_dhcp_lease_file = mock.MagicMock(
-            return_value=[
-                {
-                    "interface": "eth0",
-                    "fixed-address": "192.168.0.1",
-                    "subnet-mask": "255.255.255.0",
-                    "routers": "192.168.0.1",
-                    "renew": "4 2017/07/27 18:02:30",
-                    "expire": "5 2017/07/28 07:08:15",
-                }
-            ]
+        get_newest_lease = mock.MagicMock(
+            return_value={
+                "interface": "eth0",
+                "fixed-address": "192.168.0.1",
+                "subnet-mask": "255.255.255.0",
+                "routers": "192.168.0.1",
+                "renew": "4 2017/07/27 18:02:30",
+                "expire": "5 2017/07/28 07:08:15",
+            }
         )
 
         self.patches.enter_context(
             mock.patch(
-                DHCP_MOD_PATH + ".IscDhclient.parse_dhcp_lease_file",
-                parse_dhcp_lease_file,
+                DHCP_MOD_PATH + ".IscDhclient.get_newest_lease",
+                get_newest_lease,
             )
         )
 

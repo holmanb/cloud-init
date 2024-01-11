@@ -15,6 +15,7 @@
 import logging
 import os
 import time
+from contextlib import suppress
 from socket import gaierror, getaddrinfo, inet_ntoa
 from struct import pack
 
@@ -22,6 +23,7 @@ from cloudinit import sources, subp
 from cloudinit import url_helper as uhelp
 from cloudinit import util
 from cloudinit.net import dhcp
+from cloudinit.net.dhcp import InvalidDHCPLeaseFileError
 from cloudinit.sources.helpers import ec2
 
 LOG = logging.getLogger(__name__)
@@ -110,17 +112,36 @@ class DataSourceCloudStack(sources.DataSource):
             "Falling back to ISC dhclient"
         )
 
+        # some distros might use isc-dhclient for network setup via their
+        # network manager. If this happens, the lease is more recent than the
+        # ephemeral lease, so use it first.
         lease_file = dhcp.IscDhclient.get_latest_lease(
             self.distro.dhclient_lease_directory,
             self.distro.dhclient_lease_file_regex,
         )
-        if not lease_file:
-            LOG.debug("Dhclient lease file wasn't found")
-            return None
+        if lease_file:
+            with suppress(FileNotFoundError), open(lease_file, "r"):
+                latest_lease = dhcp.IscDhclient.parse_leases(
+                    util.load_file(lease_file)
+                )
+                if not latest_lease:
+                    raise InvalidDHCPLeaseFileError(
+                        "Cannot parse empty dhcp lease file {0}".format(
+                            lease_file
+                        )
+                    )
+                return latest_lease[-1].get("domain-name") or None
 
-        latest_lease = dhcp.IscDhclient.parse_dhcp_lease_file(lease_file)[-1]
-        domainname = latest_lease.get("domain-name", None)
-        return domainname if domainname else None
+        # If no distro leases were found, check the ephemeral lease that
+        # cloud-init set up.
+        with suppress(FileNotFoundError):
+            latest_lease = self.distro.dhcp_client.get_newest_lease(
+                self.fallback_interface
+            )
+            domain_name = latest_lease.get("domain-name") or None
+            return domain_name
+        LOG.debug("No dhcp leases found")
+        return None
 
     def get_hostname(
         self,
@@ -299,6 +320,9 @@ def get_vr_address(distro):
         )
         if latest_address:
             return latest_address
+    latest_lease = distro.dhcp_client.get_newest_lease(distro)
+    if latest_lease:
+        return latest_address
 
     # No virtual router found, fallback to default gateway
     LOG.debug("No DHCP found, using default gateway")
