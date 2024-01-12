@@ -464,7 +464,7 @@ class TestDataSourceGCE(test_helpers.ResponsesTestCase):
             mock.call(distro, iface="ens0p5"),
             mock.call(distro, iface="ens0p6"),
         ]
-        assert ds._fallback_interface == "ens0p6"
+        assert ds.fallback_interface == "ens0p6"
         assert ds.metadata == "md"
         assert ds.userdata_raw == "ud"
 

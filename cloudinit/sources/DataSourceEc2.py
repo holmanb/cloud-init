@@ -532,19 +532,6 @@ class DataSourceEc2(sources.DataSource):
 
         return self._network_config
 
-    @property
-    def fallback_interface(self):
-        if self._fallback_interface is None:
-            # fallback_nic was used at one point, so restored objects may
-            # have an attribute there. respect that if found.
-            _legacy_fbnic = getattr(self, "fallback_nic", None)
-            if _legacy_fbnic:
-                self._fallback_interface = _legacy_fbnic
-                self.fallback_nic = None
-            else:
-                return super(DataSourceEc2, self).fallback_interface
-        return self._fallback_interface
-
     def crawl_metadata(self):
         """Crawl metadata service when available.
 

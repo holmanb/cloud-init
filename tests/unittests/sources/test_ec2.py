@@ -10,6 +10,7 @@ import requests
 import responses
 
 from cloudinit import helpers
+from cloudinit.distros import ubuntu
 from cloudinit.sources import DataSourceEc2 as ec2
 from tests.unittests import helpers as test_helpers
 
@@ -342,9 +343,11 @@ class TestEc2(test_helpers.ResponsesTestCase):
         p.start()
         self.addCleanup(p.stop)
 
-    def _setup_ds(self, sys_cfg, platform_data, md, md_version=None):
+    def _setup_ds(
+        self, sys_cfg, platform_data, md, md_version=None, distro=None
+    ):
         self.uris = []
-        distro = mock.MagicMock()
+        distro = distro or mock.MagicMock()
         distro.get_tmp_exec_path = self.tmp_dir
         paths = helpers.Paths({"run_dir": self.tmp})
         if sys_cfg is None:
@@ -846,7 +849,7 @@ class TestEc2(test_helpers.ResponsesTestCase):
 
     @mock.patch("cloudinit.net.ephemeral.EphemeralIPv6Network")
     @mock.patch("cloudinit.net.ephemeral.EphemeralIPv4Network")
-    @mock.patch("cloudinit.net.find_fallback_nic")
+    @mock.patch("cloudinit.distros.net.find_fallback_nic")
     @mock.patch("cloudinit.net.ephemeral.maybe_perform_dhcp_discovery")
     @mock.patch("cloudinit.sources.DataSourceEc2.util.is_FreeBSD")
     def test_ec2_local_performs_dhcp_on_non_bsd(
@@ -873,6 +876,7 @@ class TestEc2(test_helpers.ResponsesTestCase):
             platform_data=self.valid_platform_data,
             sys_cfg={"datasource": {"Ec2": {"strict_id": False}}},
             md={"md": DEFAULT_METADATA},
+            distro=ubuntu.Distro("", {}, {}),
         )
 
         ret = ds.get_data()

@@ -23,7 +23,6 @@ from cloudinit import sources, subp
 from cloudinit import url_helper as uhelp
 from cloudinit import util
 from cloudinit.net import dhcp
-from cloudinit.net.dhcp import InvalidDHCPLeaseFileError
 from cloudinit.sources.helpers import ec2
 
 LOG = logging.getLogger(__name__)
@@ -115,22 +114,18 @@ class DataSourceCloudStack(sources.DataSource):
         # some distros might use isc-dhclient for network setup via their
         # network manager. If this happens, the lease is more recent than the
         # ephemeral lease, so use it first.
-        lease_file = dhcp.IscDhclient.get_latest_lease(
-            self.distro.dhclient_lease_directory,
-            self.distro.dhclient_lease_file_regex,
+        with suppress(dhcp.NoDHCPLeaseMissingDhclientError):
+            domain_name = dhcp.IscDhclient().get_key_from_latest_lease(
+                self.distro, "domain-name"
+            )
+            if domain_name:
+                return domain_name
+
+        LOG.debug(
+            "Could not obtain FQDN from ISC dhclient leases. "
+            "Falling back to %s",
+            self.distro.dhcp_client.client_name,
         )
-        if lease_file:
-            with suppress(FileNotFoundError), open(lease_file, "r"):
-                latest_lease = dhcp.IscDhclient.parse_leases(
-                    util.load_file(lease_file)
-                )
-                if not latest_lease:
-                    raise InvalidDHCPLeaseFileError(
-                        "Cannot parse empty dhcp lease file {0}".format(
-                            lease_file
-                        )
-                    )
-                return latest_lease[-1].get("domain-name") or None
 
         # If no distro leases were found, check the ephemeral lease that
         # cloud-init set up.
@@ -308,21 +303,25 @@ def get_vr_address(distro):
         return latest_address
 
     # Try dhcp lease files next
-    # get_latest_lease() needs a Distro object to know which directory
+    # get_key_from_latest_lease() needs a Distro object to know which directory
     # stores lease files
-    lease_file = dhcp.IscDhclient.get_latest_lease(
-        distro.dhclient_lease_directory, distro.dhclient_lease_file_regex
-    )
-
-    if lease_file:
-        latest_address = dhcp.IscDhclient.parse_dhcp_server_from_lease_file(
-            lease_file
+    with suppress(dhcp.NoDHCPLeaseMissingDhclientError):
+        latest_address = dhcp.IscDhclient().get_key_from_latest_lease(
+            distro, "dhcp-server-identifier"
         )
         if latest_address:
+            LOG.debug("Found SERVER_ADDRESS '%s' via dhclient", latest_address)
             return latest_address
-    latest_lease = distro.dhcp_client.get_newest_lease(distro)
-    if latest_lease:
-        return latest_address
+
+    with suppress(FileNotFoundError):
+        latest_lease = distro.dhcp_client.get_newest_lease(distro)
+        if latest_lease:
+            LOG.debug(
+                "Found SERVER_ADDRESS '%s' via ephemeral %s lease ",
+                latest_lease,
+                distro.dhcp_client.client_name,
+            )
+            return latest_lease
 
     # No virtual router found, fallback to default gateway
     LOG.debug("No DHCP found, using default gateway")

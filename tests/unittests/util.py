@@ -57,6 +57,10 @@ class DataSourceTesting(DataSourceNone):
     def fallback_interface(self):
         return None
 
+    @fallback_interface.setter
+    def fallback_interface(self):
+        return None
+
     @property
     def cloud_name(self):
         return "testing"
