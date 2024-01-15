@@ -6,10 +6,13 @@
 
 import abc
 import glob
+import ipaddress
 import logging
 import os
 import re
 import signal
+import socket
+import struct
 import time
 from contextlib import suppress
 from io import StringIO
@@ -17,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import configobj
 
-from cloudinit import subp, temp_utils, util
+from cloudinit import subp, net, temp_utils, util
 from cloudinit.net import (
     get_ib_interface_hwaddr,
     get_interface_mac,
@@ -204,7 +207,12 @@ class IscDhclient(DhcpClient):
                 line = line.strip().replace('"', "").replace("option ", "")
                 if line:
                     lease_options.append(line.split(" ", 1))
-            dhcp_leases.append(dict(lease_options))
+            options = dict(lease_options)
+            if "unknown-245" in options:
+                options["unknown-245"] = IscDhclient.parse_unknown_option_245(
+                    options["unknown-245"].pop()
+                )
+            dhcp_leases.append(options)
         return dhcp_leases
 
     def get_newest_lease(self, interface: str) -> Dict[str, Any]:
@@ -520,6 +528,28 @@ class IscDhclient(DhcpClient):
                         if server:
                             return server
 
+    @staticmethod
+    def parse_unknown_option_245(option_value) -> str:
+        """azure uses this lease option to advertise the wireserver address
+
+        parse the address from dhclient's representation to ip address string
+        """
+        unescaped_value = option_value.replace("\\", "")
+        if len(unescaped_value) > 4:
+            hex_string = ""
+            for hex_pair in unescaped_value.split(":"):
+                if len(hex_pair) == 1:
+                    hex_pair = "0" + hex_pair
+                hex_string += hex_pair
+            packed_bytes = struct.pack(
+                ">L", int(hex_string.replace(":", ""), 16)
+            )
+        else:
+            packed_bytes = unescaped_value.encode("utf-8")
+        address = socket.inet_ntoa(packed_bytes)
+        LOG.info("parsed option unknown-245: [%s]", address)
+        return address
+
 
 class Dhcpcd(DhcpClient):
     client_name = "dhcpcd"
@@ -639,17 +669,24 @@ class Dhcpcd(DhcpClient):
             content.
         """
         try:
-            return self.parse_dhcpcd_lease(
+            lease_file = f"/var/lib/dhcpcd/{interface}.lease"
+            lease_file = util.load_file(lease_file, decode=False)
+            parsed_lease = self.parse_dhcpcd_lease(
                 subp.subp(
                     [
                         "dhcpcd",
                         "--dumplease",
-                        interface,
+                        "--ipv4only",
                     ],
                     rcs=[0, 1],
+                    data=lease_file
                 ).stdout,
                 interface,
             )
+            parsed_lease["unknown-245"] = self.parse_unknown_option_245(
+                lease_file
+            )
+            return parsed_lease
 
         except subp.ProcessExecutionError as error:
             LOG.debug(
@@ -659,6 +696,35 @@ class Dhcpcd(DhcpClient):
                 error.stdout,
             )
             raise NoDHCPLeaseError from error
+
+    @staticmethod
+    def parse_unknown_option_245(option_value) -> Optional[str]:
+
+        def iter_options(data: bytes, index: int):
+            """options are variable length, and consist of the following format
+
+            option number: 1 byte
+            option length: 1 byte
+            option data: variable length (see length field)
+            """
+            while len(data) >= index + 2:
+                code = data[index]
+                length = data[1 + index]
+                option = data[2 + index: 2 + index + length]
+                yield code, option
+                index = 2 + length + index
+
+        for code, option in iter_options(option_value, 240):
+            if 245 == code:
+                address = net.maybe_get_address(
+                    ipaddress.IPv4Address,
+                    ".".join([str(byte) for byte in option]),
+                )
+                if address:
+                    LOG.info("parsed option unknown-245: [%s]", address)
+                    return address
+                LOG.warning("error parsing unknown-245: [%s]", option)
+        return None
 
     @staticmethod
     def parse_static_routes(routes: str) -> List[Tuple[str, str]]:
