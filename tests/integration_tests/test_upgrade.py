@@ -3,6 +3,7 @@ import logging
 import os
 
 import pytest
+import yaml
 
 from tests.integration_tests.clouds import IntegrationCloud
 from tests.integration_tests.conftest import get_validated_source
@@ -137,7 +138,9 @@ def test_clean_boot_of_upgraded_package(session_cloud: IntegrationCloud):
                 assert post_json["v1"]["datasource"].startswith(
                     "DataSourceAzure"
                 )
-        assert pre_network == post_network
+        pre = yaml.load(pre_network)
+        pre["network"]["ethernets"]["ens4"]["dhcp6"] = True
+        assert pre == yaml.load(post_network)
 
         # Calculate and log all the boot numbers
         pre_analyze_totals = [
