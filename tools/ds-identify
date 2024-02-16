@@ -97,6 +97,10 @@ _DI_LOGGED=""
 # set DI_MAIN='noop' in environment to source this file with no main called.
 DI_MAIN=${DI_MAIN:-main}
 
+# set MAX_BLOCKS to smaller or larger size to tune maximum memory usage by
+# ds-identify for single file reads - default to 64 KiB
+MAX_BLOCKS=${MAX_BLOCKS:-64}
+
 DI_BLKID_EXPORT_OUT=""
 DI_GEOM_LABEL_STATUS_OUT=""
 DI_DEFAULT_POLICY="search,found=all,maybe=all,notfound=${DI_DISABLED}"
@@ -799,6 +803,59 @@ dscheck_Akamai() {
     return ${DS_NOT_FOUND}
 }
 
+parse_large_file() {
+    local fname="$1"
+    while read line; do
+        line=${line%%#*}
+        echo "$fname=[$line]"
+        trim "$line"
+        line="$_RET"
+        case "$line" in
+	$key:\ *|"${key}":)
+		ret=${line#*:};
+		ret=${ret# };
+		found=$((found+1))
+		found_fn="$fname";;
+        esac
+    done <"$fname"
+    if [ "$found" -ne 0 ]; then
+        _RET="$ret"
+        _RET_fname="$found_fn"
+        return 0
+    fi
+    return 1
+}
+
+parse_small_file() {
+    local fname="$1"
+    local contents="" oifs="$IFS"
+    contents="$(cat $fname)"
+    # shellcheck disable=2086
+    { IFS="$CR"; set -- $contents; IFS="$oifs"; }
+    for line in "$@"; do
+
+        # trim comments
+        line="${line%%#*}"
+
+        # trim preceeding whitespace
+        trim "$line"
+        line="$_RET"
+
+        case "$line" in
+	    $key:\ *|"${key}":)
+		ret=${line#*:};
+		ret=${ret# };
+		found=$((found+1))
+		_RET_fname="$fname";;
+        esac
+    done
+    if [ "$found" -ne 0 ]; then
+        _RET="$ret"
+        return 0
+    fi
+    return 1
+}
+
 check_config() {
     # check_config(key [,file_globs])
     # somewhat hackily read through file_globs for 'key'
@@ -817,23 +874,25 @@ check_config() {
     if [ "$1" = "$files" -a ! -f "$1" ]; then
         return 1
     fi
-    local fname="" line="" ret="" found=0 found_fn=""
+    local fname="" line="" ret="" found=0 found_fn="" file_size=0
     for fname in "$@"; do
         [ -f "$fname" ] || continue
-        while read line; do
-            line=${line%%#*}
-            case "$line" in
-                $key:\ *|"${key}":)
-                    ret=${line#*:};
-                    ret=${ret# };
-                    found=$((found+1))
-                    found_fn="$fname";;
-            esac
-        done <"$fname"
+
+        # If file is less than 64k, read the whole file into memory.
+        # Some shells read from files one character at a time from disk
+        # which can cause performance issues. Reading the whole file
+        # into memory, however, would fail due to kernel-enforeced
+        # memory limits on processes (best case) or physical memory
+        # limits (worst case). Therefore, large file parsing will still
+        # need to happen using the old byte-by-byte streaming method.
+        file_size="$(du -k $fname | cut -f1)"
+        if [ "$file_size" -gt "$MAX_BLOCKS" ]; then
+            parse_large_file "$fname" && found=1
+        else
+            parse_small_file "$fname" && found=1
+        fi
     done
-    if [ $found -ne 0 ]; then
-        _RET="$ret"
-        _RET_fname="$found_fn"
+    if [ "$found" -ne 0 ]; then
         return 0
     fi
     return 1
@@ -2043,6 +2102,7 @@ main() {
     echo "$ret" > "$PATH_RUN_DI_RESULT"
     read_uptime
     debug 1 "[up ${_RET}s]" "returning $ret"
+#    return 1
     return "$ret"
 }
 
