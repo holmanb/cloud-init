@@ -18,6 +18,7 @@ import logging
 import os
 import pwd
 import re
+import shlex
 import string
 
 from cloudinit import atomic_helper, net, sources, subp, util
@@ -27,6 +28,16 @@ LOG = logging.getLogger(__name__)
 DEFAULT_IID = "iid-dsopennebula"
 DEFAULT_PARSEUSER = "nobody"
 CONTEXT_DISK_FILES = ["context.sh"]
+EXCLUDED_VARS = (
+    "EPOCHREALTIME",
+    "EPOCHSECONDS",
+    "RANDOM",
+    "LINENO",
+    "SECONDS",
+    "_",
+    "SRANDOM",
+    "__v",
+)
 
 
 class DataSourceOpenNebula(sources.DataSource):
@@ -299,26 +310,107 @@ def switch_user_cmd(user):
     return ["sudo", "-u", user]
 
 
-def parse_shell_config(
-    content, keylist=None, bash=None, asuser=None, switch_user_cb=None
-):
+def parse_shell_config(content, asuser=None):
+    """run content and return environment variables which changed
 
-    if isinstance(bash, str):
-        bash = [bash]
-    elif bash is None:
-        bash = ["bash", "-e"]
+    WARNING: the special variable _start_ is used to delimit content
 
-    if switch_user_cb is None:
-        switch_user_cb = switch_user_cmd
+    a context.sh that defines this variable might break in unexpected
+    ways
+    """
+    if "_start_" in content:
+        LOG.warning(
+            "User defined _start_ variable in context.sh, this may break"
+            "cloud-init in unexpected ways."
+        )
+    if subp.which("bash"):
+        return parse_shell_config_bash(content, asuser)
+    else:
+        return parse_shell_config_posix(content, asuser)
+
+
+def parse_shell_config_posix(content, asuser=None):
+    """run content and return environment variables which changed
+
+    compatible with posix shells such as dash and ash
+    """
+
+    def varprinter():
+        return "\n".join(
+            (
+                'printf "%s\\0" _start_',
+                "set",
+                'printf "%s\\0" _start_',
+                "",
+            )
+        )
+
+    # the rendered 'bcmd' does:
+    #
+    # setup: declare variables we use (so they show up in 'all')
+    # varprinter(allvars): print all variables known at beginning
+    # content: execute the provided content
+    # varprinter(keylist): print all variables known after content
+    #
+    # output is then a newline terminated array of:
+    #   [0] unwanted content before first _start_
+    #   [1] key=value (for each preset variable)
+    #   [2] unwanted content between second and third _start_
+    #   [3] key=value (for each post set variable)
+    bcmd = (
+        "unset IFS\n"
+        "__v=''\n"
+        + varprinter()
+        + "{\n%s\n\n:\n} > /dev/null\n" % content
+        + "unset IFS\n"
+        + varprinter()
+        + "\n"
+    )
+
+    cmd = []
+    if asuser is not None:
+        cmd = switch_user_cmd(asuser)
+    cmd.extend(["sh", "-e"])
+
+    output = subp.subp(cmd, data=bcmd).stdout
+
+    # exclude vars that change on their own or that we used
+    ret = {}
+
+    # Add to ret only things were changed and not in excluded.
+    # skip all content before initial _start_\x00 pair
+    sections = output.split("_start_\x00")[1:]
+
+    # store env variables prior to content run
+    # skip all content before second _start\x00 pair
+    # store env variables prior to content run
+    before, after = sections[0], sections[2]
+
+    pre_env = dict(
+        variable.split("=", maxsplit=1) for variable in shlex.split(before)
+    )
+    post_env = dict(
+        variable.split("=", maxsplit=1) for variable in shlex.split(after)
+    )
+    for key in set(pre_env.keys()).union(set(post_env.keys())):
+        if key in EXCLUDED_VARS:
+            continue
+        value = post_env.get(key)
+        if value is not None and value != pre_env.get(key):
+            ret[key] = value
+
+    return ret
+
+
+def parse_shell_config_bash(content, asuser=None):
+    """run content and return environment variables which changed
+
+    compatible with bash
+    """
 
     # allvars expands to all existing variables by using '${!x*}' notation
     # where x is lower or upper case letters or '_'
     allvars = ["${!%s*}" % x for x in string.ascii_letters + "_"]
-
-    keylist_in = keylist
-    if keylist is None:
-        keylist = allvars
-        keylist_in = []
 
     setup = "\n".join(
         (
@@ -356,29 +448,18 @@ def parse_shell_config(
         + varprinter(allvars)
         + "{\n%s\n\n:\n} > /dev/null\n" % content
         + "unset IFS\n"
-        + varprinter(keylist)
+        + varprinter(allvars)
         + "\n"
     )
 
     cmd = []
     if asuser is not None:
-        cmd = switch_user_cb(asuser)
-
-    cmd.extend(bash)
+        cmd = switch_user_cmd(asuser)
+    cmd.extend(["bash", "-e"])
 
     (output, _error) = subp.subp(cmd, data=bcmd)
 
     # exclude vars in bash that change on their own or that we used
-    excluded = (
-        "EPOCHREALTIME",
-        "EPOCHSECONDS",
-        "RANDOM",
-        "LINENO",
-        "SECONDS",
-        "_",
-        "SRANDOM",
-        "__v",
-    )
     preset = {}
     ret = {}
     target = None
@@ -391,9 +472,7 @@ def parse_shell_config(
             (key, val) = line.split("=", 1)
             if target is preset:
                 preset[key] = val
-            elif key not in excluded and (
-                key in keylist_in or preset.get(key) != val
-            ):
+            elif key not in EXCLUDED_VARS and preset.get(key) != val:
                 ret[key] = val
         except ValueError:
             if line != "_start_":
