@@ -855,6 +855,45 @@ def main_features(name, args):
     sys.stdout.write("\n".join(sorted(version.FEATURES)) + "\n")
 
 
+class SyncException(OSError):
+    """a sync error occured"""
+
+
+def sync_wait(stage):
+    """wait for a specific stage to start
+
+    start a server listening on a unix socket at /run/cloud-init/<stage>
+    and continue once the systemd client has reached out
+    """
+    from socket import AF_UNIX, SOCK_STREAM, socket
+    sock = socket(AF_UNIX, SOCK_STREAM)
+    try:
+        sock.bind(f"/run/cloud-init/{stage}")
+        sock.listen(1)
+        connection, _ = sock.accept()
+
+        # block until a message is received
+        chunk = connection.recv(5)
+        if b"start" != chunk:
+            connection.close()
+            raise SyncException(f"Received invalid message: [{chunk}]")
+        return connection
+    except OSError as e:
+        raise SyncException from e
+
+
+def sync_notify(connection):
+    """notify a specific systemd stage that we're done
+
+    respond to the client connection started in sync_wait()
+    """
+    try:
+        connection.sendall(b"done")
+    except OSError as e:
+        raise SyncException from e
+    finally:
+        connection.close()
+
 def main(sysv_args=None):
     log.configure_root_logger()
     if not sysv_args:
@@ -887,9 +926,20 @@ def main(sysv_args=None):
         default=False,
     )
 
+    parser.add_argument(
+        "--single-process",
+        dest="single_process",
+        action="store_true",
+        help=(
+            "Run run the four stages as a single process as an optimization."
+            "Requires init system integration."
+        ),
+        default=False,
+    )
+
+
     parser.set_defaults(reporter=None)
     subparsers = parser.add_subparsers(title="Subcommands", dest="subcommand")
-    subparsers.required = True
 
     # Each action and its sub-options (if any)
     parser_init = subparsers.add_parser(
@@ -1079,6 +1129,59 @@ def main(sysv_args=None):
             parser_status.set_defaults(action=("status", handle_status_args))
 
     args = parser.parse_args(args=sysv_args)
+    if not args.single_process:
+        return sub_main(args)
+    LOG.debug("XXXX: Single process mode!!")
+
+    # local stage
+    LOG.debug("XXXX: starting local")
+    sub_main(parser.parse_args(args=["init", "--local"]))
+    LOG.debug("XXXX: local done")
+
+    # notify cloud-init-local.service that this stage has completed
+    from systemd.daemon import notify
+    out = notify("READY=1")
+    LOG.debug("XXXX: notified systemd [%s]", out)
+
+    # wait for cloud-init.service to start
+    LOG.debug("XXXX: wait for network")
+    network = sync_wait("network")
+    LOG.debug("XXXX: network wait is over")
+
+    # init stage
+    LOG.debug("XXXX: starting network")
+    sub_main(parser.parse_args(args=["init"]))
+    LOG.debug("XXXX: network done")
+
+    # notify cloud-init.service of completion
+    LOG.debug("XXXX: notify network")
+    sync_notify(network)
+
+    # wait on cloud-config.service to start
+    LOG.debug("XXXX: wait for config")
+    config = sync_wait("config")
+    LOG.debug("XXXX: config wait is over")
+
+    # config stage
+    sub_main(parser.parse_args(args=["modules", "--mode=config"]))
+
+    # notify cloud-config.service of completion
+    LOG.debug("XXXX: notify config")
+    sync_notify(config)
+
+    # wait on cloud-config.service to start
+    LOG.debug("XXXX: wait for final")
+    final = sync_wait("final")
+    LOG.debug("XXXX: final wait is over")
+
+    # final stage
+    sub_main(parser.parse_args(args=["modules", "--mode=final"]))
+
+    # notify cloud-final.service of completion
+    LOG.debug("XXXX: notify final")
+    sync_notify(final)
+
+def sub_main(args):
 
     # Subparsers.required = True and each subparser sets action=(name, functor)
     (name, functor) = args.action

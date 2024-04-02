@@ -44,7 +44,7 @@ ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/cloud-init init
+ExecStart=python3 -c 'import socket as s; c = s.socket(s.AF_UNIX, s.SOCK_STREAM); c.connect("/run/cloud-init/network"); c.sendall(b"start"); response = c.recv(5); c.close(); exit(b"done" != response);'
 RemainAfterExit=yes
 TimeoutSec=0
 
