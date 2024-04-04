@@ -21,6 +21,8 @@ from cloudinit.url_helper import (
     oauth_headers,
     read_file_or_url,
     wait_for_url,
+    readurl,
+    time,
 )
 from tests.unittests.helpers import CiTestCase, mock, skipIf
 
@@ -699,3 +701,11 @@ class TestUrlHelper:
         if "timeout" in kwargs:
             self.mock_time_value += kwargs["timeout"] + 0.0000001
         raise UrlError("test")
+
+class TestOSLimits:
+    def test_file_limit(self):
+        """
+        """
+        with mock.patch.object(time, "sleep"), mock.patch("time.sleep"):
+            for i in range(1024*42):
+                readurl("http://191.235.228.36/fail", infinite=True)

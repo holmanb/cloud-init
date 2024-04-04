@@ -242,6 +242,7 @@ def readurl(
     :param stream: if False, the response content will be immediately
     downloaded.
     """
+    LOG.info("Call readurl()")
     url = _cleanurl(url)
     req_args = {
         "url": url,
@@ -286,8 +287,11 @@ def readurl(
     # doesn't handle sleeping between tries...
     # Infinitely retry if infinite is True
     for i in count() if infinite else range(manual_tries):
+        i = 0
+        LOG.info(f"Running request {i}"); i+=1
         req_args["headers"] = headers_cb(url)
         filtered_req_args = {}
+        LOG.info(f"Running request {i}"); i+=1
         for (k, v) in req_args.items():
             if k == "data":
                 continue
@@ -300,6 +304,7 @@ def readurl(
             else:
                 filtered_req_args[k] = v
         try:
+            LOG.info(f"Running request {i}"); i+=1
 
             if log_req_resp:
                 LOG.debug(
@@ -313,11 +318,18 @@ def readurl(
             if session is None:
                 session = requests.Session()
 
+            LOG.info(f"Running request (session start) {i}"); i+=1
             with session as sess:
+                LOG.info(f"Running request (session context) {i}"); i+=1
+                LOG.info("args: %r", req_args)
                 r = sess.request(**req_args)
+                LOG.info(f"Running request (request) {i}"); i+=1
 
+            LOG.info(f"Running request {i}"); i+=1
             if check_status:
+                LOG.info(f"time is here {i}"); i+=1
                 r.raise_for_status()
+                LOG.info(f"time is here {i}"); i+=1
             LOG.debug(
                 "Read from %s (%s, %sb) after %s attempts",
                 url,
@@ -325,11 +337,13 @@ def readurl(
                 len(r.content),
                 (i + 1),
             )
+            LOG.info(f"Running request {i}"); i+=1
             # Doesn't seem like we can make it use a different
             # subclass for responses, so add our own backward-compat
             # attrs
             return UrlResponse(r)
         except exceptions.RequestException as e:
+            LOG.info(f"Running request (exception) {i}"); i+=1
             if (
                 isinstance(e, (exceptions.HTTPError))
                 and hasattr(e, "response")
@@ -366,6 +380,8 @@ def readurl(
                         sec_between,
                     )
                 time.sleep(sec_between)
+        finally:
+            LOG.info(f"Running request (finally) {i}"); i+=1
 
     raise excps[-1]
 
