@@ -1,6 +1,6 @@
 # This file is part of cloud-init. See LICENSE file for license information.
 
-from datetime import datetime
+from datetime import datetime, timezone
 from textwrap import dedent
 
 import pytest
@@ -14,6 +14,8 @@ from cloudinit.subp import which
 from cloudinit.util import is_Linux, write_file
 from tests.unittests.helpers import mock, skipIf
 
+TZ = datetime.now(timezone.utc).astimezone().tzinfo
+YEAR = datetime.now(timezone.utc).year
 
 class TestParseTimestamp:
     def test_parse_timestamp_handles_cloud_init_default_format(self):
@@ -29,8 +31,7 @@ class TestParseTimestamp:
         syslog_stamp = "Aug 08 15:12:51"
 
         # convert stamp ourselves by adding the missing year value
-        year = datetime.now().year
-        dt = datetime.strptime(syslog_stamp + " " + str(year), syslog_fmt)
+        dt = datetime.strptime(syslog_stamp + " " + str(YEAR), syslog_fmt)
         assert float(dt.strftime("%s.%f")) == parse_timestamp(syslog_stamp)
 
     def test_parse_timestamp_handles_journalctl_format_adding_year(self):
@@ -39,8 +40,7 @@ class TestParseTimestamp:
         journal_stamp = "Aug 08 17:15:50.606811"
 
         # convert stamp ourselves by adding the missing year value
-        year = datetime.now().year
-        dt = datetime.strptime(journal_stamp + " " + str(year), journal_fmt)
+        dt = datetime.strptime(journal_stamp + " " + str(YEAR), journal_fmt)
         assert float(dt.strftime("%s.%f")) == parse_timestamp(journal_stamp)
 
     @skipIf(not which("date"), "'date' command not available.")
@@ -50,12 +50,15 @@ class TestParseTimestamp:
     )
     @pytest.mark.allow_subp_for("date", "gdate")
     def test_parse_unexpected_timestamp_format_with_date_command(self):
-        """Dump sends unexpected timestamp formats to date for processing."""
-        new_fmt = "%H:%M %m/%d %Y"
+        """Dump sends unexpected timestamp formats to date for processing.
+
+        WARNING: this relies on the test system's timezone and therefore
+        needs to use timezone-aware datetime calls
+        """
         new_stamp = "17:15 08/08"
+
         # convert stamp ourselves by adding the missing year value
-        year = datetime.now().year
-        dt = datetime.strptime(new_stamp + " " + str(year), new_fmt)
+        dt = datetime(YEAR, 8, 8, 17, 15, tzinfo=TZ)
 
         assert float(dt.strftime("%s.%f")) == parse_timestamp(new_stamp)
 
@@ -100,9 +103,8 @@ class TestParseCILogLine:
             " util.py[DEBUG]: Cloud-init v. 0.7.8 running 'init-local' at"
             "  Thu, 03 Nov 2016 06:51:06 +0000. Up 1.0 seconds."
         )
-        year = datetime.now().year
         dt = datetime.strptime(
-            "Nov 03 06:51:06.074410 %d" % year, "%b %d %H:%M:%S.%f %Y"
+            "Nov 03 06:51:06.074410 %d" % YEAR, "%b %d %H:%M:%S.%f %Y"
         )
         timestamp = float(dt.strftime("%s.%f"))
         expected = {
@@ -139,15 +141,15 @@ class TestParseCILogLine:
         )
 
     def test_parse_logline_returns_event_for_amazon_linux_2_line(self):
+        """
+        WARNING: this test relies on the test system's timezone and therefore
+        needs to use timezone-aware datetime calls
+        """
         line = (
             "Apr 30 19:39:11 cloud-init[2673]: handlers.py[DEBUG]: start:"
             " init-local/check-cache: attempting to read from cache [check]"
         )
-        # Generate the expected value using `datetime`, so that TZ
-        # determination is consistent with the code under test.
-        timestamp_dt = datetime.strptime(
-            "Apr 30 19:39:11", "%b %d %H:%M:%S"
-        ).replace(year=datetime.now().year)
+        timestamp_dt = datetime(YEAR, 4, 30, 19, 39, 11, tzinfo=TZ)
         expected = {
             "description": "attempting to read from cache [check]",
             "event_type": "start",
@@ -182,9 +184,8 @@ class TestDumpEvents:
             mock.call("2016-08-30 21:53:25.972325+00:00")
         ] == m_parse_from_date.call_args_list
         assert expected_data == data
-        year = datetime.now().year
         dt1 = datetime.strptime(
-            "Nov 03 06:51:06.074410 %d" % year, "%b %d %H:%M:%S.%f %Y"
+            "Nov 03 06:51:06.074410 %d" % YEAR, "%b %d %H:%M:%S.%f %Y"
         )
         timestamp1 = float(dt1.strftime("%s.%f"))
         expected_events = [
@@ -214,9 +215,8 @@ class TestDumpEvents:
         m_parse_from_date.return_value = 1472594005.972
         with open(tmpfile) as file:
             events, data = dump_events(cisource=file)
-        year = datetime.now().year
         dt1 = datetime.strptime(
-            "Nov 03 06:51:06.074410 %d" % year, "%b %d %H:%M:%S.%f %Y"
+            "Nov 03 06:51:06.074410 %d" % YEAR, "%b %d %H:%M:%S.%f %Y"
         )
         timestamp1 = float(dt1.strftime("%s.%f"))
         expected_events = [
