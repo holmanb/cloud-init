@@ -95,7 +95,7 @@ class DataSourceNoCloud(sources.DataSource):
 
         for path in self.seed_dirs:
             try:
-                seeded = util.pathprefix2dict(path, **pp2d_kwargs)
+                seeded = path_prefix_to_dict(path, **pp2d_kwargs)
                 found.append(path)
                 LOG.debug("Using seeded data from %s", path)
                 mydata = _merge_new_seed(mydata, seeded)
@@ -117,7 +117,7 @@ class DataSourceNoCloud(sources.DataSource):
             found.append("ds_config")
 
         def _pp2d_callback(mp, data):
-            return util.pathprefix2dict(mp, **data)
+            return path_prefix_to_dict(mp, **data)
 
         label = self.ds_cfg.get("fs_label", "cidata")
         if label is not None:
@@ -263,7 +263,7 @@ def _quick_read_instance_id(dirs=None):
         if d is None:
             continue
         try:
-            data = util.pathprefix2dict(d, required=["meta-data"])
+            data = path_prefix_to_dict(d, required=["meta-data"])
             md = util.load_yaml(data["meta-data"])
             if md and iid_key in md:
                 return md[iid_key]
@@ -361,6 +361,30 @@ def _merge_new_seed(cur, seeded):
         ret["user-data"] = seeded["user-data"]
     if "vendor-data" in seeded:
         ret["vendor-data"] = seeded["vendor-data"]
+    return ret
+
+
+def path_prefix_to_dict(base, required=None, optional=None, delim=os.path.sep):
+    # return a dictionary populated with keys in 'required' and 'optional'
+    # by reading files in prefix + delim + entry
+    if required is None:
+        required = []
+    if optional is None:
+        optional = []
+
+    missing = []
+    ret = {}
+    for f in required + optional:
+        try:
+            ret[f] = util.load_binary_file(base + delim + f, quiet=False)
+        except FileNotFoundError:
+            if f in required:
+                missing.append(f)
+    if len(missing):
+        raise ValueError(
+            "Missing required files: {files}".format(files=",".join(missing))
+        )
+
     return ret
 
 

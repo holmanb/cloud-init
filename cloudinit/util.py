@@ -2847,30 +2847,6 @@ def expand_dotted_devname(dotted):
         return (dotted, None)
 
 
-def pathprefix2dict(base, required=None, optional=None, delim=os.path.sep):
-    # return a dictionary populated with keys in 'required' and 'optional'
-    # by reading files in prefix + delim + entry
-    if required is None:
-        required = []
-    if optional is None:
-        optional = []
-
-    missing = []
-    ret = {}
-    for f in required + optional:
-        try:
-            ret[f] = load_binary_file(base + delim + f, quiet=False)
-        except FileNotFoundError:
-            if f in required:
-                missing.append(f)
-    if len(missing):
-        raise ValueError(
-            "Missing required files: {files}".format(files=",".join(missing))
-        )
-
-    return ret
-
-
 def read_meminfo(meminfo="/proc/meminfo", raw=False):
     # read a /proc/meminfo style file and return
     # a dict with 'total', 'free', and 'available'
