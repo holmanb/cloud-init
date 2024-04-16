@@ -8,7 +8,6 @@ from collections import namedtuple
 from contextlib import contextmanager
 from functools import lru_cache
 from itertools import chain
-from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Set, Union
 
 import pytest
@@ -22,10 +21,6 @@ if TYPE_CHECKING:
     from tests.integration_tests.instances import IntegrationInstance
 
 log = logging.getLogger("integration_testing")
-key_pair = namedtuple("key_pair", "public_key private_key")
-
-ASSETS_DIR = Path("tests/integration_tests/assets")
-KEY_PATH = ASSETS_DIR / "keys"
 
 
 def verify_ordered_items_in_text(to_verify: list, text: str):
@@ -285,16 +280,6 @@ def emit_dots_on_travis():
         yield
     finally:
         dot_process.terminate()
-
-
-def get_test_rsa_keypair(key_name: str = "test1") -> key_pair:
-    private_key_path = KEY_PATH / "id_rsa.{}".format(key_name)
-    public_key_path = KEY_PATH / "id_rsa.{}.pub".format(key_name)
-    with public_key_path.open() as public_file:
-        public_key = public_file.read()
-    with private_key_path.open() as private_file:
-        private_key = private_file.read()
-    return key_pair(public_key, private_key)
 
 
 # We're implementing our own here in case cloud-init status --wait
