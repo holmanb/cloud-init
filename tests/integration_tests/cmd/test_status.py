@@ -10,6 +10,20 @@ from tests.integration_tests.integration_settings import PLATFORM
 from tests.integration_tests.releases import CURRENT_RELEASE, IS_UBUNTU, JAMMY
 from tests.integration_tests.util import wait_for_cloud_init
 
+# The '-' in 'hashed-password' fails schema validation
+INVALID_USER_DATA_SCHEMA = """\
+#cloud-config
+users:
+  - default
+  - name: newsuper
+    gecos: Big Stuff
+    groups: users, admin
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    hashed-password: asdfasdf
+    shell: /bin/bash
+    lock_passwd: true
+"""
+
 
 def _remove_nocloud_dir_and_reboot(client: IntegrationInstance):
     # On Impish and below, NoCloud will be detected on an LXD container.
@@ -24,6 +38,29 @@ def _remove_nocloud_dir_and_reboot(client: IntegrationInstance):
 def retry_read_from_file(client: IntegrationInstance, path: str):
     """Retry read_from_file expecting it shortly"""
     return client.read_from_file(path)
+
+
+@pytest.mark.user_data(INVALID_USER_DATA_SCHEMA)
+def test_invalid_userdata_schema(client: IntegrationInstance):
+    """Test invalid schema represented as Warnings, not fatal
+
+    PR #1175
+    """
+    result = client.execute("cloud-init status --long")
+    if CURRENT_RELEASE.series in ("focal", "jammy", "lunar", "mantic"):
+        return_code = 0  # Stable releases don't change exit code behavior
+    else:
+        return_code = 2  # 23.4 and later will exit 2 on warnings
+    assert (
+        return_code == result.return_code
+    ), f"Unexpected exit code {result.return_code}"
+    log = client.read_from_file("/var/log/cloud-init.log")
+    warning = (
+        "[WARNING]: Invalid cloud-config provided: Please run "
+        "'sudo cloud-init schema --system' to see the schema errors."
+    )
+    assert warning in log
+    assert "asdfasdf" not in log
 
 
 @pytest.mark.skipif(not IS_UBUNTU, reason="Only ever tested on Ubuntu")

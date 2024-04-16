@@ -3,9 +3,36 @@ from textwrap import dedent
 
 import pytest
 
+from tests.integration_tests.integration_settings import PLATFORM
 from tests.integration_tests.instances import IntegrationInstance
 from tests.integration_tests.releases import CURRENT_RELEASE, MANTIC
 from tests.integration_tests.util import verify_clean_log
+
+
+VALID_USER_DATA = """\
+#cloud-config
+runcmd:
+  - echo 'hi' > /var/tmp/test
+"""
+
+# The '-' in 'hashed-password' fails schema validation
+INVALID_USER_DATA_SCHEMA = """\
+#cloud-config
+users:
+  - default
+  - name: newsuper
+    gecos: Big Stuff
+    groups: users, admin
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    hashed-password: asdfasdf
+    shell: /bin/bash
+    lock_passwd: true
+"""
+
+INVALID_USER_DATA_HEADER = """\
+runcmd:
+  - echo 'hi' > /var/tmp/test
+"""
 
 USER_DATA = """\
 #cloud-config
@@ -175,3 +202,52 @@ class TestSchemaDeprecations:
             Valid schema /root/user-data"""  # noqa: E501
         )
         assert expected_output in annotated_result.stdout
+
+
+@pytest.mark.user_data(VALID_USER_DATA)
+class TestValidUserData:
+    def test_schema_status(self, class_client: IntegrationInstance):
+        """Test `cloud-init schema` with valid userdata.
+
+        PR #575
+        """
+        result = class_client.execute("cloud-init schema --system")
+        assert result.ok
+        assert "Valid schema user-data" in result.stdout.strip()
+        result = class_client.execute("cloud-init status --long")
+        assert 0 == result.return_code, (
+            f"Unexpected exit {result.return_code} from cloud-init status:"
+            f" {result}"
+        )
+
+    def test_modules_init(self, class_client: IntegrationInstance):
+        for mode in ("init", "config", "final"):
+            result = class_client.execute(f"cloud-init modules --mode {mode}")
+            assert result.ok
+            assert f"'modules:{mode}'" in result.stdout.strip()
+
+
+@pytest.mark.skipif(
+    PLATFORM == "qemu", reason="QEMU only supports #cloud-config userdata"
+)
+@pytest.mark.user_data(INVALID_USER_DATA_HEADER)
+def test_invalid_userdata(client: IntegrationInstance):
+    """Test `cloud-init schema` with invalid userdata.
+
+    PR #575
+    """
+    result = client.execute("cloud-init schema --system")
+    assert not result.ok
+    assert "Cloud config schema errors" in result.stderr
+    assert (
+        "Expected first line to be one of: #!, ## template: jinja,"
+        " #cloud-boothook, #cloud-config" in result.stderr
+    )
+    result = client.execute("cloud-init status --long")
+    if CURRENT_RELEASE.series in ("focal", "jammy", "lunar", "mantic"):
+        return_code = 0  # Stable releases don't change exit code behavior
+    else:
+        return_code = 2  # 23.4 and later will exit 2 on warnings
+    assert (
+        return_code == result.return_code
+    ), f"Unexpected exit code {result.return_code}"
