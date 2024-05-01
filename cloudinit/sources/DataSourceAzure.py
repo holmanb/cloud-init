@@ -48,28 +48,6 @@ from cloudinit.sources.helpers.azure import (
 )
 from cloudinit.url_helper import UrlError
 
-try:
-    import crypt
-
-    blowfish_hash: Any = functools.partial(
-        crypt.crypt, salt=f"$6${util.rand_str(strlen=16)}"
-    )
-except (ImportError, AttributeError):
-    try:
-        import passlib.hash
-
-        blowfish_hash = passlib.hash.sha512_crypt.hash
-    except ImportError:
-
-        def blowfish_hash(_):
-            """Raise when called so that importing this module doesn't throw
-            ImportError when ds_detect() returns false. In this case, crypt
-            and passlib are not needed.
-            """
-            raise ImportError(
-                "crypt and passlib not found, missing dependency"
-            )
-
 
 LOG = logging.getLogger(__name__)
 
@@ -1854,7 +1832,7 @@ def read_azure_ovf(contents):
     if ovf_env.password:
         defuser["lock_passwd"] = False
         if DEF_PASSWD_REDACTION != ovf_env.password:
-            defuser["hashed_passwd"] = encrypt_pass(ovf_env.password)
+            defuser["plain_text_passwd"] = ovf_env.password
 
     if defuser:
         cfg["system_info"] = {"default_user": defuser}
@@ -1877,10 +1855,6 @@ def read_azure_ovf(contents):
         logger_func=LOG.info,
     )
     return (md, ud, cfg)
-
-
-def encrypt_pass(password):
-    return blowfish_hash(password)
 
 
 @azure_ds_telemetry_reporter
