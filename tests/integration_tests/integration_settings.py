@@ -9,9 +9,9 @@ from cloudinit.util import is_false, is_true
 ##################################################################
 
 # Keep instance (mostly for debugging) when test is finished
-KEEP_INSTANCE = False
+KEEP_INSTANCE = True
 # Keep snapshot image (mostly for debugging) when test is finished
-KEEP_IMAGE = False
+KEEP_IMAGE = True
 # Run tests marked as unstable. Expect failures and dragons.
 RUN_UNSTABLE = False
 
@@ -25,7 +25,7 @@ RUN_UNSTABLE = False
 #  oci
 #  openstack
 #  qemu
-PLATFORM = "lxd_container"
+PLATFORM = "lxd_vm"
 
 # The cloud-specific instance type to run. E.g., a1.medium on AWS
 # If the pycloudlib instance provides a default, this can be left None
@@ -37,11 +37,11 @@ INSTANCE_TYPE: Optional[str] = None
 # <image_id>[::<os>::<release>::<version>].  If given, os and release should
 # describe the image specified by image_id.  (Ubuntu releases are converted
 # to this format internally; in this case, to "None::ubuntu::focal::20.04".)
-OS_IMAGE = "focal"
+OS_IMAGE = "noble"
 
 # Populate if you want to use a pre-launched instance instead of
 # creating a new one. The exact contents will be platform dependent
-EXISTING_INSTANCE_ID: Optional[str] = None
+EXISTING_INSTANCE_ID: Optional[str] = "cloudinit-0605-103844q0az1z2r"  #"cloudinit-0605-103517wlm613kf" #None #"local:cloudinit-0605-100735xxkmt2wh-snapshot"
 
 ##################################################################
 # IMAGE GENERATION SETTINGS
@@ -69,7 +69,7 @@ EXISTING_INSTANCE_ID: Optional[str] = None
 #   Install from a PPA. It MUST start with 'ppa:'
 # <file path>
 #   A path to a valid package to be uploaded and installed
-CLOUD_INIT_SOURCE = "NONE"
+CLOUD_INIT_SOURCE = "NONE" #"./cloud-init_all.deb"
 
 # Before an instance is torn down, we run `cloud-init collect-logs`
 # and transfer them locally. These settings specify when to collect these

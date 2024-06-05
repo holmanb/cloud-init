@@ -1,7 +1,9 @@
 import json
 import os
 import pathlib
-from uuid import uuid4
+from textwrap import dedent
+from contextlib import contextmanager
+from tempfile import mkstemp
 
 import pytest
 from pycloudlib.lxd.instance import LXDInstance
@@ -11,54 +13,45 @@ from tests.integration_tests.instances import IntegrationInstance
 from tests.integration_tests.integration_settings import PLATFORM
 from tests.integration_tests.releases import IS_UBUNTU
 
-DISK_PATH = "/tmp/test_disk_setup_{}".format(uuid4())
 
 
-def setup_and_mount_lxd_disk(instance: LXDInstance):
+def setup_and_mount_lxd_disk(instance: LXDInstance) -> dict:
     subp(
         "lxc config device add {} test-disk-setup-disk disk source={}".format(
-            instance.name, DISK_PATH
+            instance.name, mkstemp()[1]
         ).split()
     )
 
 
-@pytest.fixture(scope="class", autouse=True)
-def create_disk():
-    """Create 16M sparse file"""
-    pathlib.Path(DISK_PATH).touch()
-    os.truncate(DISK_PATH, 1 << 24)
-    yield
-    os.remove(DISK_PATH)
-
-
-# Create undersized partition in bootcmd
-ALIAS_USERDATA = """\
-#cloud-config
-bootcmd:
-  - parted /dev/sdb --script                \
-          mklabel gpt                       \
-          mkpart primary 0 1MiB
-  - parted /dev/sdb --script print
-growpart:
-  devices:
-  - "/"
-  - "/dev/sdb1"
-runcmd:
-  - parted /dev/sdb --script print
-"""
-
-
-@pytest.mark.user_data(ALIAS_USERDATA)
-@pytest.mark.lxd_setup.with_args(setup_and_mount_lxd_disk)
 @pytest.mark.skipif(not IS_UBUNTU, reason="Only ever tested on Ubuntu")
-@pytest.mark.skipif(
-    PLATFORM != "lxd_vm", reason="Test requires additional mounted device"
-)
 class TestGrowPart:
     """Test growpart"""
 
-    def test_grow_part(self, client: IntegrationInstance):
-        """Verify"""
+    @pytest.mark.lxd_setup.with_args(setup_and_mount_lxd_disk)
+    @pytest.mark.skipif(
+        PLATFORM != "lxd_vm", reason="Test requires additional mounted device"
+    )
+    @pytest.mark.user_data(
+        dedent(
+            """
+            #cloud-config
+            # Create undersized partition in bootcmd
+            bootcmd:
+              - parted /dev/sdb --script                \
+                      mklabel gpt                       \
+                      mkpart primary 0 1MiB
+              - parted /dev/sdb --script print
+            growpart:
+              devices:
+              - "/"
+              - "/dev/sdb1"
+            runcmd:
+              - parted /dev/sdb --script print
+            """
+        )
+    )
+    def test_grow_part_lxd(self, client: IntegrationInstance):
+        """Verify growpart on device passed via lxd"""
         log = client.read_from_file("/var/log/cloud-init.log")
         assert (
             "cc_growpart.py[INFO]: '/dev/sdb1' resized:"
@@ -70,3 +63,186 @@ class TestGrowPart:
         assert len(sdb["children"]) == 1
         assert sdb["children"][0]["name"] == "sdb1"
         assert sdb["size"] == "16M"
+
+    @pytest.mark.skipif(
+        PLATFORM != "lxd_vm", reason="Test requires more memory than normal"
+    )
+    @pytest.mark.lxd_config_dict(
+            {"limits.memory": "4GB"}
+    )
+    @pytest.mark.lxd_use_exec
+    @pytest.mark.user_data(
+        dedent(
+            """
+            #cloud-config
+            runcmd:
+              # easiest to remove all squashfs mounts by removing snapd
+              - apt -y purge snapd
+            """
+        )
+    )
+    def test_grow_part_generic(self, client: IntegrationInstance):
+        """
+
+        Note: The following operations look similar to manual chroot creation.
+        They share many things, but this differs in one fundamental way:
+
+            The goal of this is to _destroy_ the original root filesystem.
+
+        This is why the following does a pivot_root rather than a chroot.
+        In order to destroy the original root filesystem, this test does the
+        following:
+            1) create a new temporary root filesystem
+            2) switch to the new temporary root filesystem
+            3) reload processes with new root filesystem
+            4) create a shrunken partition and new filesystem on that partition
+            5) switch to the new persistent root filesystem
+            6) destroy the temporary fs
+            7) verify that cloud-init grows the root partition and filesystem
+        """
+
+        # wait until complete
+        assert client.execute("cloud-init status --wait")
+
+        # clean the instance
+        assert client.execute("cloud-init clean --logs")
+
+        # 1) create a new temporary root filesystem
+        # unmount unnecessary filesystems
+        client.execute("umount -a")
+
+        # create mountpoint for temporary root filesystem
+        assert client.execute("mkdir /tmp/tmproot/")
+
+        # mount temporary root filesystem
+        assert client.execute("mount -t tmpfs none /tmp/tmproot")
+
+        # create special directories for new filesystem mountpoints
+        assert client.execute("bash -c 'mkdir -p /tmp/tmproot/{proc,sys,dev,run,usr,var,tmp,oldroot}'")
+
+        # copy everything to temporary root filesystem
+        assert client.execute(
+            "bash -c 'cp -ax / /tmp/tmproot/'"
+        )
+
+        # make systemd play nicely with pivot root
+        assert client.execute("mount --make-rprivate /")
+
+        # 2) switch to the new temporary root filesystem
+        # switch to new root directory
+        assert client.execute("pivot_root /tmp/tmproot /tmp/tmproot/oldroot")
+
+        # move special kernel directory mounts
+        assert client.execute("for i in dev proc sys run; do mount --move /oldroot/$i /$i; done")
+
+        # 3) reload processes with new root filesystem
+        # need to restart or kill all remaining processes which access the old
+        # filesystem and disk
+        assert client.execute(
+            "systemctl | grep running | awk '{print $1}' | grep -v tty | grep '\.service$' | xargs systemctl restart"
+        )
+
+        # probably not necessary but will make this test more resilient
+        assert client.execute("systemctl disable multipathd --now ")
+
+        # reload systemd with the new root
+        assert client.execute("systemctl daemon-reexec")
+
+        # force sd-pam to reload (this will remain using the old root even
+        # after systemd restarts)
+        assert client.execute("systemctl stop user.slice")
+
+        # kill remaining users of the old root
+        assert client.execute("fuser -km -9 /oldroot")
+
+        # kill remaining users of the disk
+        assert client.execute("fuser -km -9 /dev/sda1")
+
+        # unmount the old filesystem
+        #
+        # if this fails, check for remaining references to both /oldroot
+        # and /dev/sda1 via:
+        # fuser -vm /oldroot
+        # fuser -vm /dev/sda1
+        # in /proc/mounts
+        # in the filemaps / file descriptors of existing processes under /proc
+        assert client.execute("umount /oldroot")
+
+        # 4) create a shrunken partition and new filesystem on that partition
+        # reformat the disk
+        assert client.execute(
+            dedent(
+                """\
+                parted /dev/sda --script \
+                  resizepart 1 4GiB
+                """
+            )
+        )
+
+        assert client.execute("mkfs.xfs -f /dev/sda1")
+
+        # create mountpoint for temporary root filesystem
+        assert client.execute("mkdir /tmp/tmproot")
+
+        # mount temporary root filesystem
+        assert client.execute("mount /dev/sda1 /tmp/tmproot")
+
+        # create special directories for new filesystem mountpoints
+        assert client.execute("bash -c 'mkdir -p /tmp/tmproot/{proc,sys,dev,run,usr,var,tmp,oldroot}'")
+
+        # copy everything to temporary root filesystem
+        assert client.execute(
+            "bash -c 'cp -ax / /tmp/tmproot/'"
+        )
+
+        # make systemd play nicely with pivot root
+        assert client.execute("mount --make-rprivate /")
+
+        # 5) switch to the new persistent root filesystem
+        # switch to new root directory
+        assert client.execute("pivot_root /tmp/tmproot /tmp/tmproot/oldroot")
+
+        # move special kernel directory mounts
+        assert client.execute("for i in dev proc sys run; do mount --move /oldroot/$i /$i; done")
+
+        # need to restart or kill all remaining processes which access the old
+        # filesystem and disk
+        assert client.execute(
+            "systemctl | grep running | awk '{print $1}' | grep -v tty | grep '\.service$' | xargs systemctl restart"
+        )
+
+        # probably not necessary but will make this test more resilient
+        assert client.execute("systemctl disable multipathd --now ")
+
+        # reload systemd with the new root
+        assert client.execute("systemctl daemon-reexec")
+
+        # force sd-pam to reload (this will remain using the old root even
+        # after systemd restarts)
+        assert client.execute("systemctl stop user.slice")
+
+        # kill remaining users of the old root
+        assert client.execute("fuser -km -9 /oldroot")
+
+        # kill remaining users of the disk
+        assert client.execute("fuser -km -9 /dev/sda1")
+
+        # unmount the old filesystem
+        #
+        # if this fails, check for remaining references to both /oldroot
+        # and /dev/sda1 via:
+        # fuser -vm /oldroot
+        # fuser -vm /dev/sda1
+        # in /proc/mounts
+        # in the filemaps / file descriptors of existing processes under /proc
+        assert client.execute("umount /oldroot")
+
+        # 6) verify that cloud-init grows the root partition and filesystem
+        client.execute("cloud-init init --local")
+        client.execute("cloud-init init")
+        log = client.read_from_file("/var/log/cloud-init.log")
+        assert (
+            "cc_growpart.py[INFO]: '/dev/sda1' resized:"
+            " changed (/dev/sdb1) from" in log
+        )
+        assert "Resized root filesystem" in log
