@@ -138,9 +138,13 @@ class TestGrowPart:
         # 3) reload processes with new root filesystem
         # need to restart or kill all remaining processes which access the old
         # filesystem and disk
-        assert client.execute(
-            "systemctl | grep running | awk '{print $1}' | grep -v tty | grep '\.service$' | xargs systemctl restart"
-        )
+        # the following command would do it, except pycloudlib's shell quoting / encoding code is borked
+        # "systemctl | grep running | awk '{print $1}' | grep -v tty | grep '\.service$' | xargs systemctl restart"
+        # Manually work around it.
+        for line in client.execute("systemctl").stdout.split("\n"):
+            if "running" in line and ".service" in line and "tty" not in line:
+                service = line.split()[0]
+                client.execute(f"systemctl restart {service}")
 
         # probably not necessary but will make this test more resilient
         assert client.execute("systemctl disable multipathd --now ")
@@ -153,10 +157,10 @@ class TestGrowPart:
         assert client.execute("systemctl stop user.slice")
 
         # kill remaining users of the old root
-        assert client.execute("fuser -km -9 /oldroot")
+        client.execute("fuser -km -9 /oldroot")
 
         # kill remaining users of the disk
-        assert client.execute("fuser -km -9 /dev/sda1")
+        client.execute("fuser -km -9 /dev/sda1")
 
         # unmount the old filesystem
         #
@@ -168,16 +172,12 @@ class TestGrowPart:
         # in the filemaps / file descriptors of existing processes under /proc
         assert client.execute("umount /oldroot")
 
-        # 4) create a shrunken partition and new filesystem on that partition
+        # 4) shrink the partition and create a new filesystem on that partition
         # reformat the disk
         assert client.execute(
-            dedent(
-                """\
-                parted /dev/sda --script \
-                  resizepart 1 4GiB
-                """
-            )
+            "yes|parted ---pretend-input-tty /dev/sda resizepart 1 4GiB"
         )
+        assert client.execute("partprobe")
 
         assert client.execute("mkfs.xfs -f /dev/sda1")
 
@@ -207,9 +207,13 @@ class TestGrowPart:
 
         # need to restart or kill all remaining processes which access the old
         # filesystem and disk
-        assert client.execute(
-            "systemctl | grep running | awk '{print $1}' | grep -v tty | grep '\.service$' | xargs systemctl restart"
-        )
+        # the following command would do it, except pycloudlib's shell quoting / encoding code is borked
+        # "systemctl | grep running | awk '{print $1}' | grep -v tty | grep '\.service$' | xargs systemctl restart"
+        # Manually work around it.
+        for line in client.execute("systemctl").stdout.split("\n"):
+            if "running" in line and ".service" in line and "tty" not in line:
+                service = line.split()[0]
+                client.execute(f"systemctl restart {service}")
 
         # probably not necessary but will make this test more resilient
         assert client.execute("systemctl disable multipathd --now ")
@@ -222,10 +226,12 @@ class TestGrowPart:
         assert client.execute("systemctl stop user.slice")
 
         # kill remaining users of the old root
-        assert client.execute("fuser -km -9 /oldroot")
+        # returns non-zero if files not accessed
+        client.execute("fuser -km -9 /oldroot")
 
         # kill remaining users of the disk
-        assert client.execute("fuser -km -9 /dev/sda1")
+        # returns non-zero if files not accessed
+        client.execute("fuser -km -9 /dev/sda1")
 
         # unmount the old filesystem
         #
