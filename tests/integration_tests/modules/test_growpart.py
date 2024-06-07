@@ -174,11 +174,16 @@ class TestGrowPart:
 
         # 4) shrink the partition and create a new filesystem on that partition
         # reformat the disk
+        # https://bugs.launchpad.net/ubuntu/+source/parted/+bug/1270203
         assert client.execute(
             "yes|parted ---pretend-input-tty /dev/sda resizepart 1 4GiB"
         )
         assert client.execute("partprobe")
-
+        # kill remaining users of the disk (from parted)
+        client.execute("fuser -km -9 /dev/sda1")
+        client.execute("fuser -km -9 /oldroot")
+        client.execute("fuser -km -9 /dev/sda1")
+        client.execute("fuser -km -9 /oldroot")
         assert client.execute("mkfs.xfs -f /dev/sda1")
 
         # create mountpoint for temporary root filesystem
