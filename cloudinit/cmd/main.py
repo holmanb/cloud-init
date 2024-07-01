@@ -20,6 +20,7 @@ import traceback
 import logging
 import yaml
 from typing import Tuple, Callable
+from contextlib import contextmanager
 
 from cloudinit import netinfo
 from cloudinit import signal_handler
@@ -37,7 +38,7 @@ from cloudinit.config.modules import Modules
 from cloudinit.config.schema import validate_cloudconfig_schema
 from cloudinit import log
 from cloudinit.reporting import events
-from cloudinit.settings import PER_INSTANCE, PER_ALWAYS, PER_ONCE, CLOUD_CONFIG
+from cloudinit.settings import PER_INSTANCE, PER_ALWAYS, PER_ONCE, CLOUD_CONFIG, DEFAULT_RUN_DIR
 
 # Welcome message template
 WELCOME_MSG_TPL = (
@@ -904,40 +905,38 @@ class SyncException(OSError):
     """a sync error occured"""
 
 
+@contextmanager
 def sync_wait(stage):
     """wait for a specific stage to start
 
     start a server listening on a unix socket at /run/cloud-init/<stage>
     and continue once the systemd client has reached out
     """
-    from socket import AF_UNIX, SOCK_STREAM, socket
-    sock = socket(AF_UNIX, SOCK_STREAM)
+    LOG.debug(f"sync({stage}): initial synchronization starting")
+    from socket import AF_UNIX, SOCK_DGRAM, socket
+    sock = socket(AF_UNIX, SOCK_DGRAM)
     try:
-        sock.bind(f"/run/cloud-init/{stage}")
-        sock.listen(1)
-        connection, _ = sock.accept()
+        sock.bind(f"{DEFAULT_RUN_DIR}/share/{stage}.sock")
 
-        # block until a message is received
-        chunk = connection.recv(5)
+        # block until a message is received - this may take a long time
+        chunk = sock.recv(5)
         if b"start" != chunk:
-            connection.close()
+            sock.close()
             raise SyncException(f"Received invalid message: [{chunk}]")
-        return connection
+
+        # yield control to the inner context
+        LOG.debug(f"sync({stage}): inital synchronization complete")
+        yield
+        LOG.debug(f"sync({stage}): final synchronization started")
     except OSError as e:
         raise SyncException from e
-
-
-def sync_notify(connection):
-    """notify a specific systemd stage that we're done
-
-    respond to the client connection started in sync_wait()
-    """
     try:
-        connection.sendall(b"done")
+        sock.sendall(b"done")
+        LOG.debug(f"sync({stage}): final synchronization ")
     except OSError as e:
         raise SyncException from e
     finally:
-        connection.close()
+        sock.close()
 
 def main(sysv_args=None):
     log.configure_root_logger()
@@ -1187,44 +1186,22 @@ def main(sysv_args=None):
     from systemd.daemon import notify
     out = notify("READY=1")
     LOG.debug("XXXX: notified systemd [%s]", out)
+    os.makedirs(f"{DEFAULT_RUN_DIR}/share", mode=0o700, exist_ok=True)
 
     # wait for cloud-init.service to start
-    LOG.debug("XXXX: wait for network")
-    network = sync_wait("network")
-    LOG.debug("XXXX: network wait is over")
+    with sync_wait("network"):
+        # init stage
+        sub_main(parser.parse_args(args=["init"]))
 
-    # init stage
-    LOG.debug("XXXX: starting network")
-    sub_main(parser.parse_args(args=["init"]))
-    LOG.debug("XXXX: network done")
+    # wait for cloud-config.service to start
+    with sync_wait("config"):
+        # config stage
+        sub_main(parser.parse_args(args=["modules", "--mode=config"]))
 
-    # notify cloud-init.service of completion
-    LOG.debug("XXXX: notify network")
-    sync_notify(network)
+    with sync_wait("final"):
+        # final stage
+        sub_main(parser.parse_args(args=["modules", "--mode=final"]))
 
-    # wait on cloud-config.service to start
-    LOG.debug("XXXX: wait for config")
-    config = sync_wait("config")
-    LOG.debug("XXXX: config wait is over")
-
-    # config stage
-    sub_main(parser.parse_args(args=["modules", "--mode=config"]))
-
-    # notify cloud-config.service of completion
-    LOG.debug("XXXX: notify config")
-    sync_notify(config)
-
-    # wait on cloud-config.service to start
-    LOG.debug("XXXX: wait for final")
-    final = sync_wait("final")
-    LOG.debug("XXXX: final wait is over")
-
-    # final stage
-    sub_main(parser.parse_args(args=["modules", "--mode=final"]))
-
-    # notify cloud-final.service of completion
-    LOG.debug("XXXX: notify final")
-    sync_notify(final)
 
 def sub_main(args):
 
