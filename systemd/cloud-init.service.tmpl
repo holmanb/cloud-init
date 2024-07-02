@@ -46,12 +46,13 @@ ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
 
 [Service]
 Type=oneshot
-ExecStart=python3 -c 'import socket as s; c = s.socket(s.AF_UNIX, s.SOCK_STREAM); c.connect("/run/cloud-init/share/network.sock"); c.sendall(b"start"); response = c.recv(5); c.close(); exit(b"done" != response);'
+ExecStart=nc.openbsd -U -W1 /tmp/tmp.sock
 RemainAfterExit=yes
 TimeoutSec=0
 
 # Output needs to appear in instance console output
 StandardOutput=journal+console
+StandardInputText="start"
 
 [Install]
 WantedBy=cloud-init.target
