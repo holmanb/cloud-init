@@ -913,8 +913,8 @@ def sync_wait(stage):
     and continue once the systemd client has reached out
     """
     LOG.debug(f"sync({stage}): initial synchronization starting")
-    from socket import AF_UNIX, SOCK_DGRAM, socket
-    sock = socket(AF_UNIX, SOCK_DGRAM)
+    from socket import AF_UNIX, SOCK_STREAM, socket
+    sock = socket(AF_UNIX, SOCK_STREAM)
     try:
         sock.bind(f"{DEFAULT_RUN_DIR}/share/{stage}.sock")
 
@@ -932,7 +932,7 @@ def sync_wait(stage):
         raise SyncException from e
     try:
         sock.sendall(b"done")
-        LOG.debug(f"sync({stage}): final synchronization ")
+        LOG.debug(f"sync({stage}): final synchronization complete")
     except OSError as e:
         raise SyncException from e
     finally:
