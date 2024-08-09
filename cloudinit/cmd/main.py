@@ -949,14 +949,14 @@ def main(sysv_args=None):
         "--debug",
         "-d",
         action="store_true",
-        help="Show additional pre-action logging (default: %(default)s).",
+        help="DEPRECATED: Show additional pre-action logging (default: %(default)s).",
         default=False,
     )
     parser.add_argument(
         "--force",
         action="store_true",
         help=(
-            "Force running even if no datasource is"
+            "DEPRECATED: Force running even if no datasource is"
             " found (use at your own risk)."
         ),
         dest="force",

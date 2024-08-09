@@ -18,7 +18,7 @@ Single Process Optimization
 ---------------------------
 
 As a performance optimization, cloud-init no longer runs as four seperate
-Python interpretters. Instead, it launches a single process and then
+Python processes. Instead, it launches a single process and then
 communicates with the init system over a Unix socket to allow the init system
 to tell it when it should start each stage and to tell the init system when
 each stage has completed. Init system ordering is preserved.

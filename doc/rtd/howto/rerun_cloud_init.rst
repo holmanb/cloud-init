@@ -64,6 +64,27 @@ a result.
 
 .. _partially_rerun_cloud_init:
 
+Manually run cloud-init stages
+------------------------------
+
+During normal boot of cloud-init, the init system runs the following command
+command:
+
+.. code-block:: shell-session
+
+   cloud-init --all-stages
+
+Keep in mind that running this manually may not behave the same as cloud-init
+behaves when it is started by the init system. The first reason for this is
+that cloud-init's stages are intended to run before and after specific events
+in the boot order, so there are no guarantees that it will do the right thing
+when running out of order. The second reason is that cloud-init will skip its
+normal synchronization protocol when it detects that stdin is a tty for purpose
+of debugging and development.
+
+This command cannot be expected to be stable when executed outside of the init
+system due to its ordering requirements.
+
 Reboot the instance
 -------------------
 
