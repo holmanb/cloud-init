@@ -9,10 +9,10 @@
 # This file is part of cloud-init. See LICENSE file for license information.
 
 import binascii
-import contextlib
 import copy as obj_copy
 import email
 import glob
+import contextlib
 import grp
 import gzip
 import hashlib
@@ -1391,7 +1391,7 @@ def gethostbyaddr(ip):
 def is_resolvable_url(url):
     """determine if this url is resolvable (existing or ip)."""
     return log_time(
-        logfunc=LOG.debug,
+        logger=LOG,
         msg="Resolving URL: " + url,
         func=is_resolvable,
         args=(url,),
@@ -2804,53 +2804,25 @@ def has_mount_opt(path, opt: str) -> bool:
     return opt in mnt_opts.split(",")
 
 
-T = TypeVar("T")
-
-
+@contextlib.contextmanager
 def log_time(
-    logfunc,
+    logger,
     msg,
-    func: Callable[..., T],
-    args=None,
-    kwargs=None,
-    get_uptime=False,
-) -> T:
-    if args is None:
-        args = []
-    if kwargs is None:
-        kwargs = {}
+    threashold: float = 0.5
+):
+    """
+    Log time that it takes for context to run if the time exceeds a threashold.
 
+    :param logger: Logger of the calling context
+    :param msg: Name of the thing that is being measured
+    """
     start = time.monotonic()
-
-    ustart = None
-    if get_uptime:
-        try:
-            ustart = float(uptime())
-        except ValueError:
-            pass
-
     try:
-        ret = func(*args, **kwargs)
+        yield
     finally:
         delta = time.monotonic() - start
-        udelta = None
-        if ustart is not None:
-            try:
-                udelta = float(uptime()) - ustart
-            except ValueError:
-                pass
-
-        tmsg = " took %0.3f seconds" % delta
-        if get_uptime:
-            if isinstance(udelta, (float)):
-                tmsg += " (%0.2f)" % udelta
-            else:
-                tmsg += " (N/A)"
-        try:
-            logfunc(msg + tmsg)
-        except Exception:
-            pass
-    return ret
+        if delta > threashold:
+            logger.debug(msg + " took %0.3f seconds" % delta)
 
 
 def expand_dotted_devname(dotted):
