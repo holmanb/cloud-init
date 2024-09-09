@@ -336,7 +336,7 @@ class TestCloudStackPasswordFetching(CiTestCase):
         self.addCleanup(self.patches.close)
         mod_name = MOD_PATH
         self.patches.enter_context(mock.patch("{0}.ec2".format(mod_name)))
-        self.patches.enter_context(mock.patch("{0}.uhelp".format(mod_name)))
+        self.patches.enter_context(mock.patch("{0}.url_helper".format(mod_name)))
         default_gw = "192.201.20.0"
 
         get_newest_lease_file_from_distro = mock.MagicMock(return_value=None)
@@ -381,13 +381,15 @@ class TestCloudStackPasswordFetching(CiTestCase):
         self.tmp = self.tmp_dir()
 
     def _set_password_server_response(self, response_string):
-        subp = mock.MagicMock(return_value=(response_string, ""))
+
+        readurl = mock.Mock()
         self.patches.enter_context(
             mock.patch(
-                "cloudinit.sources.DataSourceCloudStack.subp.subp", subp
+                "cloudinit.sources.DataSourceCloudStack.url_helper.readurl",
+                readurl
             )
         )
-        return subp
+        return readurl
 
     def test_empty_password_doesnt_create_config(self):
         self._set_password_server_response("")
@@ -426,14 +428,19 @@ class TestCloudStackPasswordFetching(CiTestCase):
         )
         self.assertTrue(ds.get_data())
 
-    def assertRequestTypesSent(self, subp, expected_request_types):
-        request_types = []
-        for call in subp.call_args_list:
-            args = call[0][0]
-            for arg in args:
-                if arg.startswith("DomU_Request"):
-                    request_types.append(arg.split()[1])
-        self.assertEqual(expected_request_types, request_types)
+    def assertRequestTypesSent(self, readurl, expected_request_types):
+
+        mocks = []
+        for args_list in readurl.call_args_list:
+            if mock.call(
+                url=mock.ANY,
+                retries=3,
+                timeout=20,
+                headers={"DomU_Request": mock.ANY}
+            ) == args_list:
+                mocks.append(args_list)
+        breakpoint()
+        assert args_list == expected_request_types
 
     @mock.patch(DS_PATH + ".wait_for_metadata_service")
     def test_valid_response_means_password_marked_as_saved(self, m_wait):

@@ -19,9 +19,7 @@ from contextlib import suppress
 from socket import gaierror, getaddrinfo, inet_ntoa
 from struct import pack
 
-from cloudinit import sources, subp
-from cloudinit import url_helper as uhelp
-from cloudinit import util
+from cloudinit import sources, url_helper, util
 from cloudinit.net import dhcp
 from cloudinit.sources.helpers import ec2
 
@@ -43,26 +41,19 @@ class CloudStackPasswordServerClient:
     def __init__(self, virtual_router_address):
         self.virtual_router_address = virtual_router_address
 
-    def _do_request(self, domu_request):
-        # The password server was in the past, a broken HTTP server, but is now
-        # fixed.  wget handles this seamlessly, so it's easier to shell out to
-        # that rather than write our own handling code.
-        output, _ = subp.subp(
-            [
-                "wget",
-                "--quiet",
-                "--tries",
-                "3",
-                "--timeout",
-                "20",
-                "--output-document",
-                "-",
-                "--header",
-                "DomU_Request: {0}".format(domu_request),
-                "{0}:8080".format(self.virtual_router_address),
-            ]
+    def _do_request(self, domu_request: str):
+        """Request with retries to guard against a broken password server."""
+        return (
+            url_helper.readurl(
+                url=f"{self.virtual_router_address}:8080",
+                retries=3,
+                timeout=20,
+                headers={"DomU_Request": domu_request},
+            )
+            .contents()
+            .decode()
+            .strip()
         )
-        return output.strip()
 
     def get_password(self):
         password = self._do_request("send_my_password")
@@ -173,12 +164,12 @@ class DataSourceCloudStack(sources.DataSource):
             return False
 
         urls = [
-            uhelp.combine_url(
+            url_helper.combine_url(
                 self.metadata_address, "latest/meta-data/instance-id"
             )
         ]
         start_time = time.monotonic()
-        url, _response = uhelp.wait_for_url(
+        url, _response = url_helper.wait_for_url(
             urls=urls,
             max_wait=url_params.max_wait_seconds,
             timeout=url_params.timeout_seconds,
