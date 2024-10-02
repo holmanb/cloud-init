@@ -16,7 +16,7 @@ import uuid
 from contextlib import suppress
 from typing import Dict, List
 
-from cloudinit import dmi, net, sources
+from cloudinit import dmi, net, sources, subp
 from cloudinit import url_helper as uhelp
 from cloudinit import util, warnings
 from cloudinit.distros import Distro
@@ -70,8 +70,8 @@ class DataSourceEc2(sources.DataSource):
     # They will be checked for 'resolveability' and some of the
     # following may be discarded if they do not resolve
     metadata_urls = [
-        "http://169.254.169.254",
         "http://[fd00:ec2::254]",
+        "http://169.254.169.254",
         "http://instance-data.:8773",
     ]
 
@@ -154,10 +154,33 @@ class DataSourceEc2(sources.DataSource):
                 LOG.debug("FreeBSD doesn't support running dhclient with -sf")
                 return False
             try:
+                try:
+                    # By default tentative links on linux cannot be bound to a
+                    # socket, but we don't want to wait for DAD to tell us that
+                    # no other devices share the same IPv6 address on the link
+                    # local network. That should never happen. Add the
+                    # "optimistic" flag to this interface.
+                    # TODO: This should never happen. RIGHT?!
+                    # This could only happen if both of the following are true:
+                    # a) link local network between an instance and its IMDS is shared with other instances
+                    # b) identical mac address on the same link (which would result in a broken L2, right?)
+
+                    # get the link local address
+                    util.write_file(
+                        f"/proc/sys/net/ipv6/conf/{self.distro.fallback_interface}/accept_dad",
+                        "0",
+                        omode="w",
+                    )
+
+                    # TODO: refactor into netops
+                    # TODO: tear down these changes
+                except Exception as e:
+                    LOG.warning("Unhandled exception: %s", e)
+
                 with EphemeralIPNetwork(
                     self.distro,
                     self.distro.fallback_interface,
-                    ipv4=True,
+                    ipv4=False,
                     ipv6=True,
                 ) as netw:
                     self._crawled_metadata = self.crawl_metadata()
@@ -166,6 +189,21 @@ class DataSourceEc2(sources.DataSource):
                         f" {netw.state_msg}" if netw.state_msg else "",
                     )
 
+                    # SLAAC is slow. Use a static route to direct traffic to
+                    # the link local network.
+                    subp.subp(
+                        [
+                            "ip",
+                            "-6",
+                            "r",
+                            "add",
+                            "fd00:ec2::254/64",
+                            "dev",
+                            self.distro.fallback_interface,
+                            "proto",
+                            "static",
+                        ]
+                    )
             except NoDHCPLeaseError:
                 return False
         else:
