@@ -130,8 +130,8 @@ def handle(name: str, cfg: Config, cloud: Cloud, args: list) -> None:
         except subp.ProcessExecutionError:
             if init_cfg["storage_backend"] != "lvm":
                 raise
-            LOG.warning(
-                "cloud-init doesn't use thinpool by default on Ubuntu due to "
+            LOG.info(
+                "Cloud-init doesn't use thinpool by default on Ubuntu due to "
                 "LP #1982780. This behavior will change in the future.",
             )
             subp.subp(
