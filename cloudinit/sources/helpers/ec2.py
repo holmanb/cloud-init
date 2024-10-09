@@ -9,6 +9,7 @@
 import functools
 import json
 import logging
+from concurrent import futures
 
 from cloudinit import url_helper, util
 
@@ -108,31 +109,47 @@ class MetadataMaterializer:
     def materialize(self):
         if self._md is not None:
             return self._md
-        self._md = self._materialize(self._blob, self._base_url)
+        with futures.ProcessPoolExecutor() as executor:
+            self._md = self._materialize(self._blob, self._base_url, executor)
         return self._md
 
-    def _materialize(self, blob, base_url):
-        (leaves, children) = self._parse(blob)
-        child_contents = {}
-        for c in children:
-            child_url = url_helper.combine_url(base_url, c)
-            if not child_url.endswith("/"):
-                child_url += "/"
-            child_blob = self._caller(child_url)
-            child_contents[c] = self._materialize(child_blob, child_url)
-        leaf_contents = {}
-        for field, resource in leaves.items():
-            leaf_url = url_helper.combine_url(base_url, resource)
-            leaf_blob = self._caller(leaf_url)
-            leaf_contents[field] = self._leaf_decoder(field, leaf_blob)
-        joined = {}
-        joined.update(child_contents)
-        for field in leaf_contents.keys():
-            if field in joined:
+    def _materialize(self, blob, base_url, executor):
+        leaves, children = self._parse(blob)
+        if set(leaves).intersection(set(children)):
+            LOG.warning("Duplicate key found in results from %s", base_url)
+
+        contents = {}
+        future_to_url = {
+            executor.submit(self._caller, child_url): (child, child_url)
+            for child, child_url in [
+                (
+                    child,
+                    url_helper.combine_url(base_url, child).rstrip("/") + "/",
+                )
+                for child in children
+            ]
+        }
+
+        for future in futures.as_completed(future_to_url):
+            child, child_url = future_to_url[future]
+            if child in contents:
                 LOG.warning("Duplicate key found in results from %s", base_url)
-            else:
-                joined[field] = leaf_contents[field]
-        return joined
+            contents[child] = self._materialize(
+                future.result(), child_url, executor
+            )
+
+        future_to_url = {
+            executor.submit(self._caller, leaf_url): leaf
+            for leaf, leaf_url in [
+                (leaf, url_helper.combine_url(base_url, resource))
+                for leaf, resource in leaves.items()
+            ]
+        }
+        for future in futures.as_completed(future_to_url):
+            field = future_to_url[future]
+            contents[field] = self._leaf_decoder(field, future.result())
+
+        return contents
 
 
 def skip_retry_on_codes(status_codes, _request_args, cause):
@@ -178,6 +195,18 @@ def get_instance_userdata(
         util.logexc(LOG, "Failed fetching userdata from url %s", ud_url)
     return user_data
 
+def _mcaller(url, caller, retrieval_exception_ignore_cb):
+    try:
+        return caller(url).contents
+    except url_helper.UrlError as e:
+        if (
+            not retrieval_exception_ignore_cb
+            or not retrieval_exception_ignore_cb(e)
+        ):
+            raise
+        else:
+            LOG.warning("Skipped retrieval of the content of %s", url)
+            return "(skipped)"
 
 def _get_instance_metadata(
     tree,
@@ -203,19 +232,11 @@ def _get_instance_metadata(
         exception_cb=exception_cb,
     )
 
-    def mcaller(url):
-        try:
-            return caller(url).contents
-        except url_helper.UrlError as e:
-            if (
-                not retrieval_exception_ignore_cb
-                or not retrieval_exception_ignore_cb(e)
-            ):
-                raise
-            else:
-                LOG.warning("Skipped retrieval of the content of %s", url)
-                return "(skipped)"
-
+    mcaller = functools.partial(
+        _mcaller,
+        caller=caller,
+        retrieval_exception_ignore_cb=retrieval_exception_ignore_cb,
+    )
     try:
         response = caller(md_url)
         materializer = MetadataMaterializer(
