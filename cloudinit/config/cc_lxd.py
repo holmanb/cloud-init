@@ -149,7 +149,7 @@ def handle(name: str, cfg: Config, cloud: Cloud, args: list) -> None:
             # filter it from the lxd init commands, don't configure
             # storage twice
             init_keys = tuple(
-                key for key in init_keys if key != "storage_backend"
+                key for key in init_keys if key != "storage-backend"
             )
             # Retry with thinpool in case of minimal image
             # Bug https://bugs.launchpad.net/ubuntu/+source/linux-kvm/+bug/1982780
