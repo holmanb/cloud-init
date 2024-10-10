@@ -87,49 +87,23 @@ class DataSourceGCE(sources.DataSource):
 
     def _get_data(self):
         url_params = self.get_url_params()
-        if self.perform_dhcp_setup:
-            candidate_nics = net.find_candidate_nics()
-            if DEFAULT_PRIMARY_INTERFACE in candidate_nics:
-                candidate_nics.remove(DEFAULT_PRIMARY_INTERFACE)
-                candidate_nics.insert(0, DEFAULT_PRIMARY_INTERFACE)
-            LOG.debug("Looking for the primary NIC in: %s", candidate_nics)
-            assert (
-                len(candidate_nics) >= 1
-            ), "The instance has to have at least one candidate NIC"
-            for candidate_nic in candidate_nics:
-                network_context = EphemeralDHCPv4(
-                    self.distro,
-                    iface=candidate_nic,
-                )
-                try:
-                    with network_context:
-                        try:
-                            ret = util.log_time(
-                                LOG.debug,
-                                "Crawl of GCE metadata service",
-                                read_md,
-                                kwargs={
-                                    "address": self.metadata_address,
-                                    "url_params": url_params,
-                                },
-                            )
-                        except Exception as e:
-                            LOG.debug(
-                                "Error fetching IMD with candidate NIC %s: %s",
-                                candidate_nic,
-                                e,
-                            )
-                            continue
-                except NoDHCPLeaseError:
-                    continue
-                if ret["success"]:
-                    self.distro.fallback_interface = candidate_nic
-                    LOG.debug("Primary NIC found: %s.", candidate_nic)
-                    break
-            if self.distro.fallback_interface is None:
-                LOG.warning(
-                    "Did not find a fallback interface on %s.", self.cloud_name
-                )
+        try:
+            ret = util.log_time(
+                LOG.debug,
+                "Crawl of GCE metadata service",
+                read_md,
+                kwargs={
+                    "address": self.metadata_address,
+                    "url_params": url_params,
+                },
+            )
+        except Exception as e:
+            LOG.debug(
+                "Error fetching IMD with candidate NIC %s: %s",
+                candidate_nic,
+                e,
+            )
+            continue
         else:
             ret = util.log_time(
                 LOG.debug,
@@ -351,7 +325,6 @@ def platform_reports_gce():
 
 # Used to match classes to dependencies.
 datasources = [
-    (DataSourceGCELocal, (sources.DEP_FILESYSTEM,)),
     (DataSourceGCE, (sources.DEP_FILESYSTEM, sources.DEP_NETWORK)),
 ]
 

@@ -354,19 +354,7 @@ class DataSourceAkamai(sources.DataSource):
         )
 
 
-class DataSourceAkamaiLocal(DataSourceAkamai):
-    """
-    A subclass of DataSourceAkamai that runs the same functions, but during the
-    init-local stage.  This allows configuring networking via cloud-init, as
-    networking hasn't been configured yet.
-    """
-
-    local_stage = True
-
-
 datasources = [
-    # run in init-local if possible
-    (DataSourceAkamaiLocal, (sources.DEP_FILESYSTEM,)),
     # if not, run in init
     (
         DataSourceAkamai,

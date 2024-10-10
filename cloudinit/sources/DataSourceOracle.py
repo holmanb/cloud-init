@@ -445,7 +445,6 @@ def read_opc_metadata(
 
 # Used to match classes to dependencies
 datasources = [
-    (DataSourceOracle, (sources.DEP_FILESYSTEM,)),
     (
         DataSourceOracleNet,
         (

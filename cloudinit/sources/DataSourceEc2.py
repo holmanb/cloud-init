@@ -1218,7 +1218,6 @@ def _get_secondary_addresses(nic_metadata, cidr_key, mac, ips, default_prefix):
 
 # Used to match classes to dependencies
 datasources = [
-    (DataSourceEc2Local, (sources.DEP_FILESYSTEM,)),  # Run at init-local
     (DataSourceEc2, (sources.DEP_FILESYSTEM, sources.DEP_NETWORK)),
 ]
 

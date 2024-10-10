@@ -20,32 +20,22 @@ LOG = logging.getLogger(__name__)
 def get_metadata(
     distro, url, timeout, retries, sec_between, agent, tmp_dir=None
 ):
-    # Bring up interface (and try until one works)
-    exception = RuntimeError("Failed to DHCP")
-
     # Seek iface with DHCP
-    for iface in get_interface_list():
-        try:
-            with EphemeralDHCPv4(
-                distro,
-                iface=iface,
-                connectivity_url_data={"url": url},
-            ):
-                # Fetch the metadata
-                v1 = read_metadata(url, timeout, retries, sec_between, agent)
+    try:
+            # Fetch the metadata
+            v1 = read_metadata(url, timeout, retries, sec_between, agent)
 
-                metadata = json.loads(v1)
-                refactor_metadata(metadata)
-                return metadata
-        except (
-            NoDHCPLeaseError,
-            subp.ProcessExecutionError,
-            RuntimeError,
-            exceptions.RequestException,
-        ) as exc:
-            LOG.error("DHCP Exception: %s", exc)
-            exception = exc
-    raise exception
+            metadata = json.loads(v1)
+            refactor_metadata(metadata)
+            return metadata
+    except (
+        NoDHCPLeaseError,
+        subp.ProcessExecutionError,
+        RuntimeError,
+        exceptions.RequestException,
+    ) as exc:
+        LOG.error("DHCP Exception: %s", exc)
+        raise exc
 
 
 # Refactor metadata into acceptable format

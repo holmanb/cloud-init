@@ -281,64 +281,28 @@ class DataSourceScaleway(sources.DataSource):
 
     def _get_data(self):
 
-        # The DataSource uses EventType.BOOT so we are called more than once.
-        # Try to crawl metadata on IPv4 first and set has_ipv4 to False if we
-        # timeout so we do not try to crawl on IPv4 more than once.
-        if self.has_ipv4:
-            try:
-                # DHCPv4 waits for timeout defined in /etc/dhcp/dhclient.conf
-                # before giving up. Lower it in config file and try it first as
-                # it will only reach timeout on VMs with only IPv6 addresses.
-                with EphemeralDHCPv4(
-                    self.distro,
-                    self.distro.fallback_interface,
-                ) as ipv4:
-                    util.log_time(
-                        logfunc=LOG.debug,
-                        msg="Set api-metadata URL depending on "
-                        "IPv4 availability",
-                        func=self._set_metadata_url,
-                        args=(self.metadata_urls,),
-                    )
-                    util.log_time(
-                        logfunc=LOG.debug,
-                        msg="Crawl of metadata service",
-                        func=self._crawl_metadata,
-                    )
-                    self.ephemeral_fixed_address = ipv4["fixed-address"]
-                    self.metadata["net_in_use"] = "ipv4"
-            except (
-                NoDHCPLeaseError,
-                ConnectionError,
-                ProcessExecutionError,
-            ) as e:
-                util.logexc(LOG, str(e))
-                # DHCPv4 timeout means that there is no DHCPv4 on the NIC.
-                # Flag it so we do not try to crawl on IPv4 again.
-                self.has_ipv4 = False
-
-        # Only crawl metadata on IPv6 if it has not been done on IPv4
-        if not self.has_ipv4:
-            try:
-                with EphemeralIPv6Network(
-                    self.distro,
-                    self.distro.fallback_interface,
-                ):
-                    util.log_time(
-                        logfunc=LOG.debug,
-                        msg="Set api-metadata URL depending on "
-                        "IPv6 availability",
-                        func=self._set_metadata_url,
-                        args=(self.metadata_urls,),
-                    )
-                    util.log_time(
-                        logfunc=LOG.debug,
-                        msg="Crawl of metadata service",
-                        func=self._crawl_metadata,
-                    )
-                    self.metadata["net_in_use"] = "ipv6"
-            except ConnectionError:
-                return False
+        try:
+            util.log_time(
+                logfunc=LOG.debug,
+                msg="Set api-metadata URL depending on "
+                "IPv4 availability",
+                func=self._set_metadata_url,
+                args=(self.metadata_urls,),
+            )
+            util.log_time(
+                logfunc=LOG.debug,
+                msg="Crawl of metadata service",
+                func=self._crawl_metadata,
+            )
+        except (
+            NoDHCPLeaseError,
+            ConnectionError,
+            ProcessExecutionError,
+        ) as e:
+            util.logexc(LOG, str(e))
+            # DHCPv4 timeout means that there is no DHCPv4 on the NIC.
+            # Flag it so we do not try to crawl on IPv4 again.
+            return False
         return True
 
     @property

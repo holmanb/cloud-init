@@ -90,7 +90,6 @@ class DataSourceAliYunLocal(DataSourceAliYun):
 
 # Used to match classes to dependencies
 datasources = [
-    (DataSourceAliYunLocal, (sources.DEP_FILESYSTEM,)),  # Run at init-local
     (DataSourceAliYun, (sources.DEP_FILESYSTEM, sources.DEP_NETWORK)),
 ]
 
