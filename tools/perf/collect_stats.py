@@ -121,9 +121,14 @@ def collect_bootspeed_data(instance):
         "time_at_ssh": retry_cmd(instance, "date --utc +'%b %d %H:%M:%S.%N'")
     }
     ssh_time = time.time()
-    data["cloudinit_status"] = json.loads(
-        instance.execute("cloud-init status --format=json --wait")
-    )
+    instance.execute("cloud-init status --wait")
+    try:
+        data["cloudinit_status"] = json.loads(
+            instance.execute("cloud-init status --format=json")
+        )
+    except json.decoder.JSONDecodeError:
+        # doesn't work on xenial
+        data["cloudinit_status"] = ""
     cloudinit_done_time = time.time()
     data["client_time_to_ssh"] = ssh_time - start_time
     data["client_time_to_cloudinit_done"] = cloudinit_done_time - start_time
