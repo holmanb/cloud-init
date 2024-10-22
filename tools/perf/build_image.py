@@ -260,11 +260,17 @@ def get_parser():
     parser.add_argument(
         "-c",
         "--cloud-init-source-path",
-        default=DEFAULT_PPA,
         dest="deb_path",
         help=(
             "Deb path or PPA from which to install cloud-init for testing."
-            f" Default {DEFAULT_PPA}"
+        ),
+    )
+    parser.add_argument(
+        "--platform",
+        dest="platform",
+        choices=list(PLATFORM_FROM_STR.keys()),
+        help=(
+            "Cloud platform to build image for"
         ),
     )
     return parser
@@ -280,6 +286,32 @@ def assert_dependencies():
             "Try: apt-get install cloud-image-utils"
         )
 
+PLATFORM_FROM_STR = {
+    "qemu": pycloudlib.Qemu,
+    "gce": pycloudlib.GCE,
+    "ec2": pycloudlib.EC2,
+    "lxd_container": pycloudlib.LXDContainer,
+    "lxd_vm": pycloudlib.LXDVirtualMachine,
+}
+
+def build_image(
+    deb_path: str,
+    release: str,
+    platform: str,
+):
+    with PLATFORM_FROM_STR[platform](tag="examples") as cloud:
+        daily = cloud.daily_image(release=release)
+        print(
+            f"--- Creating modified daily image {daily} with cloud-init"
+            f" from {deb_path}"
+        )
+        if isinstance(cloud, pycloudlib.LXDContainer):
+            out = update_cloud_init_in_container_image(daily, deb_path, suffix=1)
+        else:
+            out = update_cloud_init_in_vm_image(daily, deb_path, suffix=1)
+        print(out)
+        return out
+
 
 if __name__ == "__main__":
     assert_dependencies()
@@ -290,4 +322,4 @@ if __name__ == "__main__":
     logging.getLogger("paramiko.transport:Auth").setLevel(logging.INFO)
     parser = get_parser()
     args = parser.parse_args()
-    build_image(args.deb_path, release=args.release, platform="")
+    build_image(args.deb_path, release=args.release, platform=args.platform)
