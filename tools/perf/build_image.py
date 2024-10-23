@@ -113,10 +113,10 @@ def update_cloud_init_in_container_image(
             [
                 "sudo",
                 "chroot",
-                "./squashfs-root/",
+                "squashfs-root/",
                 "sh",
                 "-c",
-                "dpkg -i /root/cloud-init.deb",
+                "dpkg -i /cloud-init.deb",
             ],
             [
                 "sudo",
@@ -176,7 +176,8 @@ def update_cloud_init_in_container_image(
                     command,
                     cwd=temp_dir.name,
                 )
-            except:
+            except Exception as e:
+                print(e)
                 breakpoint()
                 print(command)
         subp.subp(
