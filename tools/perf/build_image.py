@@ -85,28 +85,28 @@ def update_cloud_init_in_container_image(
             [
                 "sudo",
                 "mount",
-                "--rbind",
+                "--bind",
                 "/dev",
                 "squashfs-root/dev/",
             ],
             [
                 "sudo",
                 "mount",
-                "--rbind",
+                "--bind",
                 "/sys",
                 "squashfs-root/sys/",
             ],
             [
                 "sudo",
                 "mount",
-                "--rbind",
+                "--bind",
                 "/run",
                 "./squashfs-root/run/",
             ],
             [
                 "sudo",
                 "mount",
-                "--rbind",
+                "--bind",
                 "/tmp",
                 "./squashfs-root/tmp/",
             ],
@@ -182,7 +182,9 @@ def update_cloud_init_in_container_image(
                 print(command)
         subp.subp(
             ["mksquashfs", "root", "new.squashfs"],
+            cwd=temp_dir.name,
         )
+        breakpoint()
         subp.subp(
             [
                 "lxc",
