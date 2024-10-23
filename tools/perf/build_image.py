@@ -27,14 +27,10 @@ REQUIREMENTS:
 
 # ruff: noqa: E501
 
-import json
 import logging
 import os
-import re
 import shutil
 import glob
-import statistics
-import subprocess
 import tempfile
 import time
 from argparse import ArgumentParser, FileType
@@ -76,96 +72,113 @@ def update_cloud_init_in_container_image(
 ) -> str:
     alias = f"{img_path}{suffix}"
     temp_dir = tempfile.TemporaryDirectory()
-    build_container_image = [
-        ["cp", deb_path, "root"],
-        [
-            "sudo",
-            "mount",
-            "-t",
-            "proc",
-            "/proc",
-            "root/proc",
-        ],
-        [
-            "sudo",
-            "mount",
-            "--rbind",
-            "/dev",
-            "root/dev/",
-        ],
-        [
-            "sudo",
-            "mount",
-            "--rbind",
-            "/sys",
-            "root/sys/",
-        ],
-        [
-            "sudo",
-            "mount",
-            "--rbind",
-            "/run",
-            "root/run/",
-        ],
-        [
-            "sudo",
-            "mount",
-            "--rbind",
-            "/tmp",
-            "root/tmp/",
-        ],
-        [
-            "sudo",
-            "chroot",
-            "sh",
-            "-c",
-            f"chroot ${{MOUNTPOINT}} add-apt-repository {
-                deb_path} -y; DEBIAN_FRONTEND=noninteractive chroot ${{MOUNTPOINT}} apt-get install -o  Dpkg::Options::='--force-confold' cloud-init -y",
-        ],
-        [
-            "sudo",
-            "umount",
-            "root/proc",
-        ],
-        [
-            "sudo",
-            "umount",
-            "root/dev/",
-        ],
-        [
-            "sudo",
-            "umount",
-            "root/sys/",
-        ],
-        [
-            "sudo",
-            "umount",
-            "root/run/",
-        ],
-        [
-            "sudo",
-            "umount",
-            "root/tmp/",
-        ],
-    ]
     with temp_dir:
+        build_container_image = [
+            [
+                "sudo",
+                "mount",
+                "-t",
+                "proc",
+                "/proc",
+                "squashfs-root/proc/",
+            ],
+            [
+                "sudo",
+                "mount",
+                "--rbind",
+                "/dev",
+                "squashfs-root/dev/",
+            ],
+            [
+                "sudo",
+                "mount",
+                "--rbind",
+                "/sys",
+                "squashfs-root/sys/",
+            ],
+            [
+                "sudo",
+                "mount",
+                "--rbind",
+                "/run",
+                "./squashfs-root/run/",
+            ],
+            [
+                "sudo",
+                "mount",
+                "--rbind",
+                "/tmp",
+                "./squashfs-root/tmp/",
+            ],
+            [
+                "sudo",
+                "chroot",
+                "./squashfs-root/",
+                "sh",
+                "-c",
+                "dpkg -i /root/cloud-init.deb",
+            ],
+            [
+                "sudo",
+                "umount",
+                "./squashfs-root/proc",
+            ],
+            [
+                "sudo",
+                "umount",
+                "./squashfs-root/dev/",
+            ],
+            [
+                "sudo",
+                "umount",
+                "./squashfs-root/sys/",
+            ],
+            [
+                "sudo",
+                "umount",
+                "./squashfs-root/run/",
+            ],
+            [
+                "sudo",
+                "umount",
+                "./squashfs-root/tmp/",
+            ],
+        ]
         subp.subp(
             [
                 "lxc",
                 "image",
                 "export",
                 img_path,
-                str(temp_dir),
+                temp_dir.name,
             ]
         )
         # this should only have one file each
-        squashfs = glob.glob(f"./{tempfile}/*.squashfs")[0]
-        meta = glob.glob(f"./{tempfile}/*.tar.xz")[0]
+        squashfs = glob.glob(f"{temp_dir.name}/*.squashfs")[0]
+        meta = glob.glob(f"{temp_dir.name}/*.tar.xz")[0]
         subp.subp(
-            ["unsquashfs", squashfs, "-d", "root"],
+            ["sudo", "unsquashfs", squashfs],
+            cwd=temp_dir.name,
+        )
+        breakpoint()
+        subp.subp(
+            [
+                "sudo",
+                "cp",
+                deb_path,
+                f"{
+                    temp_dir.name}/squashfs-root/cloud-init.deb",
+            ]
         )
         for command in build_container_image:
-            subp.subp(command)
+            try:
+                subp.subp(
+                    command,
+                    cwd=temp_dir.name,
+                )
+            except:
+                breakpoint()
+                print(command)
         subp.subp(
             ["mksquashfs", "root", "new.squashfs"],
         )
@@ -176,7 +189,7 @@ def update_cloud_init_in_container_image(
                 "import",
                 meta,
                 img_path,
-                str(temp_dir),
+                temp_dir.name,
                 f"--alias={alias}",
             ]
         )
@@ -233,9 +246,7 @@ def update_cloud_init_in_vm_image(
 def get_parser():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument(
-        "-r",
-        "--release",
-        default="noble",
+        "--series",
         choices=[
             "bionic",
             "focal",
@@ -248,30 +259,21 @@ def get_parser():
         help="Ubuntu series to test",
     )
     parser.add_argument(
-        "-d",
-        "--data-dir",
-        dest="data_dir",
-        default="perf_data",
-        help=(
-            "Data directory in which to store perf value dicts."
-            "Default: perf_data"
-        ),
-    )
-    parser.add_argument(
-        "-c",
-        "--cloud-init-source-path",
-        dest="deb_path",
-        help=(
-            "Deb path or PPA from which to install cloud-init for testing."
-        ),
+        "--package",
+        dest="package",
+        help=("Deb path from which to install cloud-init for testing."),
     )
     parser.add_argument(
         "--platform",
         dest="platform",
         choices=list(PLATFORM_FROM_STR.keys()),
-        help=(
-            "Cloud platform to build image for"
-        ),
+        help=("Cloud platform to build image for"),
+    )
+    parser.add_argument(
+        "--image",
+        dest="image",
+        default="",
+        help=("Image to build from, defaults to daily image"),
     )
     return parser
 
@@ -286,6 +288,7 @@ def assert_dependencies():
             "Try: apt-get install cloud-image-utils"
         )
 
+
 PLATFORM_FROM_STR = {
     "qemu": pycloudlib.Qemu,
     "gce": pycloudlib.GCE,
@@ -294,19 +297,18 @@ PLATFORM_FROM_STR = {
     "lxd_vm": pycloudlib.LXDVirtualMachine,
 }
 
-def build_image(
-    deb_path: str,
-    release: str,
-    platform: str,
-):
+
+def build_image(deb_path: str, series: str, platform: str, image: str):
     with PLATFORM_FROM_STR[platform](tag="examples") as cloud:
-        daily = cloud.daily_image(release=release)
+        daily = image or cloud.daily_image(release=series)
         print(
             f"--- Creating modified daily image {daily} with cloud-init"
             f" from {deb_path}"
         )
         if isinstance(cloud, pycloudlib.LXDContainer):
-            out = update_cloud_init_in_container_image(daily, deb_path, suffix=1)
+            out = update_cloud_init_in_container_image(
+                daily, deb_path, suffix=1
+            )
         else:
             out = update_cloud_init_in_vm_image(daily, deb_path, suffix=1)
         print(out)
@@ -322,4 +324,9 @@ if __name__ == "__main__":
     logging.getLogger("paramiko.transport:Auth").setLevel(logging.INFO)
     parser = get_parser()
     args = parser.parse_args()
-    build_image(args.deb_path, release=args.release, platform=args.platform)
+    build_image(
+        args.package,
+        series=args.series,
+        platform=args.platform,
+        image=args.image,
+    )
