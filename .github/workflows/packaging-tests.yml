@@ -1,9 +1,10 @@
-name: Packaging
+name: "Packaging"
 
 on:
   pull_request:
+  push:
     branches:
-      - 'ubuntu/**'
+      - main
 
 concurrency:
   group: 'ci-${{ github.workflow }}-${{ github.ref }}'
@@ -17,9 +18,48 @@ env:
   RELEASE: focal
 
 jobs:
-  check-patches:
-    name: Check patches
+  patch-conflicts-ubuntu:
+    if: ${{ ! contains('ubuntu', github.ref) }}
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        merge-branch: ["ubuntu/devel", "ubuntu/oracular", "ubuntu/noble", "ubuntu/jammy", "ubuntu/focal"]
+    name: Check patches
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch all branches for merging
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install dependencies
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -y install tox quilt
+      - name: Configure quilt
+        run: |
+          echo 'QUILT_PATCHES=debian/patches' >> ~/.quiltrc
+          echo 'QUILT_SERIES=debian/patches/series' >> ~/.quiltrc
+      - name: Configure git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+      - name: Git merge
+        run: |
+          git merge "origin/${{ matrix.merge-branch }}"
+      - name: Apply patches and run unit tests
+        run: |
+          if [ ! -f debian/patches/series ]; then
+            echo "no patches, skipping"
+            exit 0
+          fi
+          quilt push -a
+          tox -e py3
+          quilt pop -a
+  patch-conflicts-upstream:
+    if: ${{ github.ref == 'ref/heads/main' }}
+    runs-on: ubuntu-24.04
+    name: Check patches (packaging PR)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,17 +71,11 @@ jobs:
         run: |
           sudo DEBIAN_FRONTEND=noninteractive apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get -y install tox quilt
-      - name: Setup quilt environment
+      - name: Configure quilt
         run: |
           echo 'QUILT_PATCHES=debian/patches' >> ~/.quiltrc
           echo 'QUILT_SERIES=debian/patches/series' >> ~/.quiltrc
-
-      - name: Configure git and merge
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git merge origin/main
-      - name: Quilt patches apply successfully and tests run
+      - name: Apply patches and run unit tests
         run: |
           if [ ! -f debian/patches/series ]; then
             echo "no patches, skipping"
