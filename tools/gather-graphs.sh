@@ -59,7 +59,7 @@ function run_test(){
     wait_for_cloud_init $INSTANCE
     gather $INSTANCE $OUT first-boot
 
-    # re-run
+    # re-run: cached
     lxc exec $INSTANCE -- cloud-init clean --machine-id --logs --configs all
     lxc stop $INSTANCE
 
@@ -78,7 +78,7 @@ function run_test(){
     lxc exec $INSTANCE -- mkdir $MAIN_D
     lxc file push $OVERRIDE_MAIN $INSTANCE/$MAIN_D/override.conf
 
-    # re-run
+    # re-run: no-op
     lxc exec $INSTANCE -- cloud-init clean --machine-id --logs --configs all
     lxc stop $INSTANCE
 
@@ -86,6 +86,16 @@ function run_test(){
     lxc start $INSTANCE
     wait_for_cloud_init $INSTANCE
     gather $INSTANCE $OUT overridden
+
+    # re-run: disabled
+    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs --configs all
+    lxc exec $INSTANCE -- touch /etc/cloud/cloud-init.disabled
+    lxc stop $INSTANCE
+
+    # gather modified data
+    lxc start $INSTANCE
+    wait_for_cloud_init $INSTANCE
+    gather $INSTANCE $OUT disabled
     lxc rm -f $INSTANCE
 }
 
