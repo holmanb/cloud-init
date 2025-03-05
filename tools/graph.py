@@ -5,6 +5,9 @@ from pprint import pprint
 import pygraphviz
 import matplotlib.pyplot as plt
 
+# TODO: note to future self
+# it's probably easier to just iterate over every combination of nodes
+# referenced in cloud-init's unit files
 #
 # setup
 # -----

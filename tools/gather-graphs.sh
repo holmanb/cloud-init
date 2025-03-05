@@ -2,9 +2,14 @@
 # shellcheck disable=SC2086
 
 # debug mode, print output
-if [ $1 = "-d" ] || [ $1 = "--debug" ]; then
-    set -x
-fi
+#if test $1 -eq "-d"; then
+set -x
+#fi
+#if test $1 -eq "-s"; then
+#    DELETE=""
+#else
+#    DELETE="lxc rm -f $INSTANCE"
+#fi
 
 # fail if a command fails
 set -e
@@ -50,8 +55,8 @@ function wait_for_target(){
         fi
         sleep 1
         total=$(( total + 1))
-        if $total -ge 150; then
-            notify "getting slow bro"
+        if [[ $total -ge 150 ]]; then
+            notify "getting slow"
         fi
     done
 }
@@ -62,8 +67,11 @@ function gather(){
     local FLAVOR=$3
     # defaults to gathering for multi-user.target
     lxc exec $INSTANCE -- systemd-analyze dot > $OUT/dot-$INSTANCE-$FLAVOR.dot
+    lxc exec $INSTANCE -- systemd-analyze dot --order > $OUT/dot-order-$INSTANCE-$FLAVOR.dot
     lxc exec $INSTANCE -- systemd-analyze critical-chain > $OUT/chain-$INSTANCE-$FLAVOR.txt
+    lxc exec $INSTANCE -- systemd-analyze critical-chain --fuzz=60> $OUT/chain-fuzz-$INSTANCE-$FLAVOR.txt
     lxc exec $INSTANCE -- systemd-analyze > $OUT/analyze-$INSTANCE-$FLAVOR.txt
+    lxc exec $INSTANCE -- systemd-analyze blame > $OUT/blame-$INSTANCE-$FLAVOR.txt
 }
 
 function run_test(){
@@ -117,7 +125,7 @@ function run_test(){
     # in this case cloud-init.target is unavailable
     wait_for_target $INSTANCE $MULTI_USER
     gather $INSTANCE $OUT disabled
-    lxc rm -f $INSTANCE
+    eval $DELETE
 }
 
 mkdir -p $OUT
