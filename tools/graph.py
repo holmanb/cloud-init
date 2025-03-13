@@ -31,9 +31,10 @@ import matplotlib.pyplot as plt
 CONFLICTS = "red"
 ORDER_ATTR = "green"
 MEMBERSHIP_ATTRS = ["black", "gold", "grey66", "black"]
+CLOUD_INIT_UNITS = ["cloud-init.target", "cloud-init-local.service", "cloud-init-network.service", "cloud-config.service", "cloud-final.service", "cloud-init-main.service"]
 
 SHUTDOWN = "shutdown.target"
-GRAPHICAL = "graphical.target"
+DEFAULT = "graphical.target"
 
 order_edges = []
 membership_edges = []
@@ -59,12 +60,22 @@ boot_target_nodes = []
 for node in membership_graph.nodes:
     if node not in order_graph:
         print(f"node: {node} not in order_graph: {order_graph}")
-    if node in nx.single_source_shortest_path(membership_graph, GRAPHICAL):
+    if node in nx.descendants(membership_graph, DEFAULT):
         boot_target_nodes.append(node)
 breakpoint()
 
-# boot_target contains all nodes in required in the boot target
+# boot_target contains all nodes required in the boot target
 boot_target = order_graph.subgraph(boot_target_nodes)
+
+found_cloud_init_units = []
+cloud_init_neighbors = []
+for node in boot_target.nodes:
+    if node in CLOUD_INIT_UNITS:
+        found_cloud_init_units.append(node)
+        for neighbor in boot_target.neighbors(node):
+            cloud_init_neighbors.append(neighbor)
+assert set(found_cloud_init_units) == set(CLOUD_INIT_UNITS)
+breakpoint()
 
 # identify the _order_ of all nodes that are members of the boot transaction
 # identified by the boot target graphical.target
@@ -73,7 +84,7 @@ assert nx.is_directed_acyclic_graph(member_order)
 breakpoint()
 
 # identify only nodes that are descendants of graphical.target
-# graph = member_order.subgraph(nx.ancestors(member_order, GRAPHICAL))
+# graph = member_order.subgraph(nx.ancestors(member_order, DEFAULT))
 #nx.transitive_reduction(member_order)
 #graph = member_order
 
