@@ -68,6 +68,7 @@ function gather(){
     # defaults to gathering for multi-user.target
     lxc exec $INSTANCE -- systemd-analyze dot > $OUT/dot-$INSTANCE-$FLAVOR.dot
     lxc exec $INSTANCE -- systemd-analyze dot --order > $OUT/dot-order-$INSTANCE-$FLAVOR.dot
+    lxc exec $INSTANCE -- systemd-analyze dot --require > $OUT/dot-require-$INSTANCE-$FLAVOR.dot
     lxc exec $INSTANCE -- systemd-analyze critical-chain > $OUT/chain-$INSTANCE-$FLAVOR.txt
     lxc exec $INSTANCE -- systemd-analyze critical-chain --fuzz=60> $OUT/chain-fuzz-$INSTANCE-$FLAVOR.txt
     lxc exec $INSTANCE -- systemd-analyze > $OUT/analyze-$INSTANCE-$FLAVOR.txt
