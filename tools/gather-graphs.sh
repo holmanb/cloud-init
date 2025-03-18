@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2086
 
-# debug mode, print output
-#if test $1 -eq "-d"; then
 set -x
-#fi
-#if test $1 -eq "-s"; then
-#    DELETE=""
-#else
-#    DELETE="lxc rm -f $INSTANCE"
-#fi
 
 # fail if a command fails
 set -e
@@ -18,7 +10,7 @@ set -e
 LAUNCH="lxc launch ubuntu:oracular oracular"
 
 # OUT is the output directory for files
-OUT=out/
+RESULTS=out/
 
 # CLOUD_INIT is the cloud-init target
 CLOUD_INIT=cloud-init
@@ -79,6 +71,7 @@ function run_test(){
     # launch once, to avoid differences due to caching effects (i.e. snapd')
     local INSTANCE="$1"
     local COMMAND="$2"
+    local OUT="$3"
     local OVERRIDE=$(mktemp)
     local OVERRIDE_MAIN=$(mktemp)
     local MAIN_D=/etc/systemd/system/cloud-init-main.service.d/
@@ -89,7 +82,7 @@ function run_test(){
     gather $INSTANCE $OUT first-boot
 
     # re-run: cached
-    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs --configs all
+    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs
     lxc stop $INSTANCE
 
     # gather cached data
@@ -108,7 +101,7 @@ function run_test(){
     lxc file push $OVERRIDE_MAIN $INSTANCE/$MAIN_D/override.conf
 
     # re-run: no-op
-    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs --configs all
+    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs
     lxc stop $INSTANCE
 
     # gather modified data
@@ -117,7 +110,7 @@ function run_test(){
     gather $INSTANCE $OUT overridden
 
     # re-run: disabled
-    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs --configs all
+    lxc exec $INSTANCE -- cloud-init clean --machine-id --logs
     lxc exec $INSTANCE -- touch /etc/cloud/cloud-init.disabled
     lxc stop $INSTANCE
 
@@ -129,10 +122,13 @@ function run_test(){
     eval $DELETE
 }
 
-mkdir -p $OUT
-for INSTANCE in oracular oracular-vm; do
-    if [[ $INSTANCE == *"-vm" ]]; then
-        LAUNCH="$LAUNCH-vm --vm"
-    fi
-    run_test $INSTANCE "$LAUNCH"
+# seeking statistical significance
+for ITER in $(seq 0 30); do
+    mkdir -p $RESULTS/$ITER
+    for INSTANCE in oracular oracular-vm; do
+        if [[ $INSTANCE == *"-vm" ]]; then
+            LAUNCH="$LAUNCH-vm --vm"
+        fi
+        run_test $INSTANCE "$LAUNCH" $RESULTS/$ITER
+    done
 done
