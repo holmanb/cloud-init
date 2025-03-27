@@ -66,7 +66,7 @@ def create_graph(graph, name):
 
     fig, ax = plt.subplots()
     nx.draw_networkx(
-        graph, pos=pos, ax=ax, with_labels=False, arrowsize=1, linewidths=0.1
+        graph, pos=pos, ax=ax, with_labels=False, arrowsize=1, linewidths=0.1, edge_color="lightgray", style="dashed"
     )
     nx.draw_networkx_labels(
         graph, pos=pos, ax=ax, verticalalignment="bottom", font_weight="normal"
