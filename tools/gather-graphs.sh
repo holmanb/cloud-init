@@ -39,10 +39,11 @@ function wait_for_target(){
             echo "waiting for dbus ${total}s"
         elif [ $rc = 255 ];then
             echo "vm not booted yet ${total}s"
-        # manually check if cloud-init.target is active yet
-        elif lxc exec $INSTANCE -- systemctl is-active $TARGET.target | grep active; then
-            lxc exec $INSTANCE -- systemctl list-jobs
+        elif lxc exec $INSTANCE -- systemctl is-system-running | grep running; then
             return
+        elif lxc exec $INSTANCE -- systemctl is-active $TARGET.target | grep active; then
+            # manually check if cloud-init.target is active yet
+            echo "almost booted, but not quite done"
         else
             echo "inactive ${total}s"
         fi
@@ -50,6 +51,7 @@ function wait_for_target(){
         total=$(( total + 1))
         if [[ $total -ge 150 ]]; then
             notify "getting slow"
+            lxc exec $INSTANCE -- sh -c "systemctl list-jobs"
         fi
     done
 }
@@ -71,7 +73,6 @@ function gather(){
     # remove the cache and reload the daemon
     lxc exec $INSTANCE -- rm -rf /run/cloud-init/
 
-    # WTF lxc exec w/stderr is broken?
     lxc exec $INSTANCE -- time -o tmp systemctl daemon-reload
     lxc exec $INSTANCE -- cat tmp > $OUT/uncached-reload-$INSTANCE-$FLAVOR.txt
 }
@@ -124,7 +125,6 @@ function gather_no_ops(){
     # override services with no-ops
     printf '[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE
     printf '[Service]\nExecStart=\nExecStart=systemd-notify --ready --status "done"\n' > $OVERRIDE_MAIN
-    #wait_for_target $INSTANCE $CLOUD_INIT
     for DIR in /etc/systemd/system/cloud-init-local.service.d/ /etc/systemd/system/cloud-init-network.service.d/ /etc/systemd/system/cloud-config.service.d/ /etc/systemd/system/cloud-final.service.d/; do
         lxc exec $INSTANCE -- mkdir -p $DIR
         lxc file push $OVERRIDE $INSTANCE/$DIR/override.conf
@@ -136,7 +136,6 @@ function gather_no_ops(){
     clean_rerun $INSTANCE "no-op" $CLOUD_INIT
 
     # teardown
-    #wait_for_target $INSTANCE $CLOUD_INIT
     for DIR in /etc/systemd/system/cloud-init-local.service.d/ /etc/systemd/system/cloud-init-network.service.d/ /etc/systemd/system/cloud-config.service.d/ /etc/systemd/system/cloud-final.service.d/; do
         lxc exec $INSTANCE -- rm -rf $DIR
     done
@@ -281,10 +280,11 @@ function run_test(){
     local OUT="$3"
 
     gather_first_boot $INSTANCE "$COMMAND"
-    gather_divide_conquer_disabled $INSTANCE
+
+    #gather_divide_conquer_disabled $INSTANCE
     #gather_divide_conquer_enabled $INSTANCE
-    # gather_no_ops $INSTANCE
-    # gather_disabled $INSTANCE
+    gather_no_ops $INSTANCE
+    gather_disabled $INSTANCE
     # gather_generator_no_op $INSTANCE
     #gather_cached $INSTANCE
 
@@ -295,7 +295,7 @@ function run_test(){
 for ITER in $(seq 0 30); do
     mkdir -p $RESULTS/$ITER
     echo "running iteration: $ITER"
-    for INSTANCE in $SERIES; do #$SERIES-vm; do
+    for INSTANCE in $SERIES $SERIES-vm; do
         if [[ $INSTANCE == *"-vm" ]]; then
             COMMAND="$LAUNCH $INSTANCE --vm"
         else
