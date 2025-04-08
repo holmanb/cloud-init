@@ -109,12 +109,12 @@ def create_graph(graph, name):
 order_edges = []
 requirement_edges = []
 Path("./cache/").mkdir(exist_ok=True)
-full_graph = nx.DiGraph(nx.nx_agraph.read_dot(f"./out/{ITER}/dot-{INPUT}.dot"))
+full_graph = nx.DiGraph(nx.nx_agraph.read_dot(f"./out/{ITER}/dot-total.dot"))
 order_graph_raw = nx.DiGraph(
-    nx.nx_agraph.read_dot(f"./out/{ITER}/dot-order-{INPUT}.dot")
+    nx.nx_agraph.read_dot(f"./out/{ITER}/dot-order.dot")
 )
 require_graph = nx.DiGraph(
-    nx.nx_agraph.read_dot(f"./out/{ITER}/dot-require-{INPUT}.dot")
+    nx.nx_agraph.read_dot(f"./out/{ITER}/dot-require.dot")
 )
 
 assert nx.is_directed_acyclic_graph(order_graph_raw)

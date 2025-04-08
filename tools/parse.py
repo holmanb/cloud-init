@@ -188,7 +188,8 @@ graphical.target @1.989s
         └─gvfs-daemon.service @2.249s +2ms
 """
 
-pprint(parse_systemd_analyze(analyze))
-pprint(parse_daemon_reloads(daemon_reload))
-pprint(parse_analyze_blame(analyze_blame))
-pprint(parse_critical_chain(critical_chain))
+if __name__ == "__main__":
+    pprint(parse_systemd_analyze(analyze))
+    pprint(parse_daemon_reloads(daemon_reload))
+    pprint(parse_analyze_blame(analyze_blame))
+    pprint(parse_critical_chain(critical_chain))
