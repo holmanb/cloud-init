@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 import pickle
 import time
@@ -15,23 +16,25 @@ import matplotlib as mpl
 # it's probably easier to just iterate over every combination of nodes
 # referenced in cloud-init's unit files
 #
-# setup
+# usage
 # -----
+# ```
 # sudo apt install libgraphviz-dev
 # python3 -m venv .venv
 # . .venv/bin/activate
 # pip install networkx pygraphviz matplotlib
-#
+# ./graph.py cleaned
+# ```
 # Legend: systemd-analyze dot
 # ---------------------------
-#
+# ```
 #   Color legend: black     = Requires
 #                 dark blue = Requisite
 #                 gold      = BindsTo
 #                 dark grey = Wants
 #                 red       = Conflicts
 #                 green     = After
-#
+# ```
 
 
 CONFLICTS = "red"
@@ -51,8 +54,12 @@ SHUTDOWN = "shutdown.target"
 DEFAULT = "graphical.target"
 SYSTEM_SLICE = "system.slice"
 SERIES = "oracular"
-INPUT = "oracular-cleaned"
+INPUT = f"{SERIES}-{sys.argv[1]}"
 CACHE_FILE = f"./cache/{INPUT}"
+ITER = "0"
+OUTPUT_PNG = f"./out/{ITER}/{INPUT}.png"
+OUTPUT_PDF = f"./out/{ITER}/{INPUT}.pdf"
+OUTPUT_SVG = f"./out/{ITER}/{INPUT}.svg"
 
 
 def create_graph(graph, name):
@@ -82,28 +89,32 @@ def create_graph(graph, name):
     )
     ax.set_title(f"DAG layout in topological order: {name}")
     fig.set_layout_engine(layout="constrained")
+    plt.savefig(OUTPUT_PDF, bbox_inches="tight")
+    plt.savefig(OUTPUT_PNG, bbox_inches="tight")
+    plt.savefig(OUTPUT_SVG, bbox_inches="tight")
+
+
     plt.show()
-    plt.savefig()
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "no_cache",
-    help="skip using cached paths",
-    action="store_true",
-    default=False,
-)
-args = parser.parse_args()
+# parser = argparse.ArgumentParser()
+# parser.add_argument(
+#    "no_cache",
+#    help="skip using cached paths",
+#    action="store_true",
+#    default=False,
+# )
+# args = parser.parse_args()
 
 order_edges = []
 requirement_edges = []
 Path("./cache/").mkdir(exist_ok=True)
-full_graph = nx.DiGraph(nx.nx_agraph.read_dot(f"./out/dot-{INPUT}.dot"))
+full_graph = nx.DiGraph(nx.nx_agraph.read_dot(f"./out/{ITER}/dot-{INPUT}.dot"))
 order_graph_raw = nx.DiGraph(
-    nx.nx_agraph.read_dot(f"./out/dot-order-{INPUT}.dot")
+    nx.nx_agraph.read_dot(f"./out/{ITER}/dot-order-{INPUT}.dot")
 )
 require_graph = nx.DiGraph(
-    nx.nx_agraph.read_dot(f"./out/dot-require-{INPUT}.dot")
+    nx.nx_agraph.read_dot(f"./out/{ITER}/dot-require-{INPUT}.dot")
 )
 
 assert nx.is_directed_acyclic_graph(order_graph_raw)
@@ -215,47 +226,47 @@ if set(reduced.edges()) == set(reversed.edges()):
 create_graph(reversed, "normal")
 create_graph(reduced, "reduced")
 
-# compare to cloud-init-less graph
-boot_order_minus_cloud_init = boot_order.subgraph(
-    list(set(boot_order.nodes) - set(CLOUD_INIT_UNITS))
-)
-paths_between_neighbors = {DEFAULT}
-neighbors_minus_cloud_init = list(set(neighbors) - set(CLOUD_INIT_UNITS))
-try:
-    #    if not args.no_cache:
-    # this next operation is very slow, so cache it
-    with open(CACHE_FILE + "no-cloud-init", "rb") as f:
-        paths_between_neighbortargets = pickle.load(f)
-except FileNotFoundError:
-    pass
-for src in neighbors_minus_cloud_init:
-    nodes = []
-    # get all paths via reachable nodes
-    for node in neighbors_minus_cloud_init:
-        if nx.has_path(boot_order_minus_cloud_init, source=src, target=node):
-            nodes.append(node)
-    print(f"getting simple paths for {src} -> {nodes}")
-    for path in nx.all_simple_paths(
-        boot_order_minus_cloud_init, source=src, target=nodes
-    ):
-        paths_between_neighbors.update(set(path))
-
-print(f"getting paths took {time.time() - start}s")
-if not args.no_cache:
-    with open(CACHE_FILE + "no-cloud-init", "wb") as f:
-        pickle.dump(paths_between_neighbors, f)
-paths_between_neighbors = list(set(paths_between_neighbors))
-print("paths between neighbors:")
-pprint(paths_between_neighbors)
-
-cloud_init_graph = boot_order_minus_cloud_init.subgraph(
-    paths_between_neighbors
-)
-
-reversed = nx.reverse_view(cloud_init_graph)
-reduced = nx.transitive_reduction(reversed)
-if set(reduced.edges()) == set(reversed.edges()):
-    print("transitive reduction did nothing!")
-
-create_graph(reversed, "normal")
-create_graph(reduced, "reduced")
+## compare to cloud-init-less graph
+# boot_order_minus_cloud_init = boot_order.subgraph(
+#    list(set(boot_order.nodes) - set(CLOUD_INIT_UNITS))
+# )
+# paths_between_neighbors = {DEFAULT}
+# neighbors_minus_cloud_init = list(set(neighbors) - set(CLOUD_INIT_UNITS))
+# try:
+#    #    if not args.no_cache:
+#    # this next operation is very slow, so cache it
+#    with open(CACHE_FILE + "no-cloud-init", "rb") as f:
+#        paths_between_neighbortargets = pickle.load(f)
+# except FileNotFoundError:
+#    pass
+# for src in neighbors_minus_cloud_init:
+#    nodes = []
+#    # get all paths via reachable nodes
+#    for node in neighbors_minus_cloud_init:
+#        if nx.has_path(boot_order_minus_cloud_init, source=src, target=node):
+#            nodes.append(node)
+#    print(f"getting simple paths for {src} -> {nodes}")
+#    for path in nx.all_simple_paths(
+#        boot_order_minus_cloud_init, source=src, target=nodes
+#    ):
+#        paths_between_neighbors.update(set(path))
+#
+# print(f"getting paths took {time.time() - start}s")
+# if not args.no_cache:
+#    with open(CACHE_FILE + "no-cloud-init", "wb") as f:
+#        pickle.dump(paths_between_neighbors, f)
+# paths_between_neighbors = list(set(paths_between_neighbors))
+# print("paths between neighbors:")
+# pprint(paths_between_neighbors)
+#
+# cloud_init_graph = boot_order_minus_cloud_init.subgraph(
+#    paths_between_neighbors
+# )
+#
+# reversed = nx.reverse_view(cloud_init_graph)
+# reduced = nx.transitive_reduction(reversed)
+# if set(reduced.edges()) == set(reversed.edges()):
+#    print("transitive reduction did nothing!")
+#
+# create_graph(reversed, "normal")
+# create_graph(reduced, "reduced")
