@@ -50,8 +50,10 @@ CLOUD_INIT_UNITS = [
 SHUTDOWN = "shutdown.target"
 DEFAULT = "graphical.target"
 SYSTEM_SLICE = "system.slice"
-INPUT="oracular-cleaned"
+SERIES = "oracular"
+INPUT = "oracular-cleaned"
 CACHE_FILE = f"./cache/{INPUT}"
+
 
 def create_graph(graph, name):
     # https://networkx.org/documentation/stable/auto_examples/graph/plot_dag_layout.html#sphx-glr-auto-examples-graph-plot-dag-layout-py
@@ -66,7 +68,14 @@ def create_graph(graph, name):
 
     fig, ax = plt.subplots()
     nx.draw_networkx(
-        graph, pos=pos, ax=ax, with_labels=False, arrowsize=1, linewidths=0.1, edge_color="lightgray", style="dashed"
+        graph,
+        pos=pos,
+        ax=ax,
+        with_labels=False,
+        arrowsize=1,
+        linewidths=0.1,
+        edge_color="lightgray",
+        style="dashed",
     )
     nx.draw_networkx_labels(
         graph, pos=pos, ax=ax, verticalalignment="bottom", font_weight="normal"
@@ -74,17 +83,22 @@ def create_graph(graph, name):
     ax.set_title(f"DAG layout in topological order: {name}")
     fig.set_layout_engine(layout="constrained")
     plt.show()
+    plt.savefig()
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument("no_cache", help="skip using cached paths", action="store_true", default=False)
+parser.add_argument(
+    "no_cache",
+    help="skip using cached paths",
+    action="store_true",
+    default=False,
+)
 args = parser.parse_args()
 
 order_edges = []
 requirement_edges = []
 Path("./cache/").mkdir(exist_ok=True)
-full_graph = nx.DiGraph(
-    nx.nx_agraph.read_dot(f"./out/dot-{INPUT}.dot")
-)
+full_graph = nx.DiGraph(nx.nx_agraph.read_dot(f"./out/dot-{INPUT}.dot"))
 order_graph_raw = nx.DiGraph(
     nx.nx_agraph.read_dot(f"./out/dot-order-{INPUT}.dot")
 )
@@ -202,13 +216,15 @@ create_graph(reversed, "normal")
 create_graph(reduced, "reduced")
 
 # compare to cloud-init-less graph
-boot_order_minus_cloud_init = boot_order.subgraph(list(set(boot_order.nodes) - set(CLOUD_INIT_UNITS)))
+boot_order_minus_cloud_init = boot_order.subgraph(
+    list(set(boot_order.nodes) - set(CLOUD_INIT_UNITS))
+)
 paths_between_neighbors = {DEFAULT}
 neighbors_minus_cloud_init = list(set(neighbors) - set(CLOUD_INIT_UNITS))
 try:
     #    if not args.no_cache:
     # this next operation is very slow, so cache it
-    with open(CACHE_FILE+"no-cloud-init", "rb") as f:
+    with open(CACHE_FILE + "no-cloud-init", "rb") as f:
         paths_between_neighbortargets = pickle.load(f)
 except FileNotFoundError:
     pass
@@ -219,18 +235,22 @@ for src in neighbors_minus_cloud_init:
         if nx.has_path(boot_order_minus_cloud_init, source=src, target=node):
             nodes.append(node)
     print(f"getting simple paths for {src} -> {nodes}")
-    for path in nx.all_simple_paths(boot_order_minus_cloud_init, source=src, target=nodes):
+    for path in nx.all_simple_paths(
+        boot_order_minus_cloud_init, source=src, target=nodes
+    ):
         paths_between_neighbors.update(set(path))
 
 print(f"getting paths took {time.time() - start}s")
 if not args.no_cache:
-    with open(CACHE_FILE+"no-cloud-init", "wb") as f:
+    with open(CACHE_FILE + "no-cloud-init", "wb") as f:
         pickle.dump(paths_between_neighbors, f)
 paths_between_neighbors = list(set(paths_between_neighbors))
 print("paths between neighbors:")
 pprint(paths_between_neighbors)
 
-cloud_init_graph = boot_order_minus_cloud_init.subgraph(paths_between_neighbors)
+cloud_init_graph = boot_order_minus_cloud_init.subgraph(
+    paths_between_neighbors
+)
 
 reversed = nx.reverse_view(cloud_init_graph)
 reduced = nx.transitive_reduction(reversed)
