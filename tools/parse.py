@@ -1,4 +1,7 @@
+#!/usr/bin/env python3
 import re
+from pprint import pprint
+from typing import Optional
 from dataclasses import dataclass
 
 
@@ -176,7 +179,16 @@ analyze_blame = """\
  249ms snapd.service
 """
 
+critical_chain = """\
+graphical.target @1.989s
+└─multi-user.target @1.989s
+  └─systemd-user-sessions.service @1.988s +1ms
+    └─local-fs.target @1.988s
+      └─run-user-1000-gvfs.mount @2.249s
+        └─gvfs-daemon.service @2.249s +2ms
+"""
 
-print(parse_systemd_analyze(analyze))
-print(parse_daemon_reloads(daemon_reload))
-print(parse_analyze_blame(analyze_blame))
+pprint(parse_systemd_analyze(analyze))
+pprint(parse_daemon_reloads(daemon_reload))
+pprint(parse_analyze_blame(analyze_blame))
+pprint(parse_critical_chain(critical_chain))
