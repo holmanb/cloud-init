@@ -293,6 +293,9 @@ Environment="TAKO=/run/tako/"
 Type=simple
 ExecStartPre=mkdir -p /run/tako
 ExecStart=$TAKO_INSTALLED_BINARY run
+# a putrid hack to prevent races with other services
+# Type=notify and sending a notify once socket is available is the right way to do this
+ExecStartPost=sh -c "until [ -f /run/tako/.tako.socket ]; do sleep 0.005; done"
 
 # Output needs to appear in instance console output
 StandardOutput=kmsg
