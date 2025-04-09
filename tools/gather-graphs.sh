@@ -28,12 +28,53 @@ CLOUD_INIT=cloud-init
 GRAPHICAL=graphical
 
 TAKO="tako"
-# TAKO_BINARY_BINARY is the path of the pre-built tako binary
+
+# TAKO_LOCAL_BINARY is the path of the pre-built tako binary
 TAKO_LOCAL_BINARY=$HOME/upstream/tako/tako
 
-TAKO_INSTALLED_PATH="/usr/libexec"
+TAKO_INSTALLED_PATH="usr/libexec"
 
 TAKO_INSTALLED_BINARY="$TAKO_INSTALLED_PATH/$TAKO"
+
+TAKO_TARGET_CONTENT=$(cat << EOD
+[Unit]
+Description=Tako target
+
+[Install]
+WantedBy=multi-user.target
+EOD
+)
+
+TAKO_DAEMON_SERVICE_CONTENT=$(cat << EOD
+[Unit]
+Description=tako service
+DefaultDependencies=no
+
+# it might be possible to run without the next line, but I would need to
+# double check that /run/ is available for writing before, during, and after remounting filesystems
+# and this also risks some really weird bugs
+After=systemd-remount-fs.service
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Environment="TAKO=/run/tako/"
+# This would probably eventually be of type notify, which is capable of
+# more richly notifying the init system of current status.
+Type=simple
+ExecStartPre=mkdir -p /run/tako
+ExecStart=/$TAKO_INSTALLED_BINARY run
+# a putrid hack to prevent races with other services
+# Type=notify and sending a notify once socket is available is the right way to do this
+ExecStartPost=sh -c "until [ -S /run/tako/.tako.socket ]; do sleep 0.005; done"
+
+# Output needs to appear in instance console output
+StandardOutput=kmsg
+
+[Install]
+WantedBy=tako.target
+EOD
+)
 
 #
 # utility functions
@@ -82,6 +123,10 @@ function gather(){
     local OUT=$2
 
     mkdir -p $OUT
+    # TODO use image serial as file name via:
+    #
+    #    lxc list -f csv -c 'image.serial' oracular-container
+    #
     # defaults to gathering for multi-user.target
     lxc exec $INSTANCE -- systemd-analyze dot > $OUT/dot-total.dot 2>/dev/null
     lxc exec $INSTANCE -- systemd-analyze dot --order > $OUT/dot-order.dot 2>/dev/null
@@ -117,7 +162,7 @@ function backup_generator(){
 }
 
 function unbackup_generator(){
-    lxc exec $INSTANCE -- mv $GENERATOR $GENERATOR_BACKUP
+    lxc exec $INSTANCE -- mv $GENERATOR_BACKUP $GENERATOR
 }
 
 function install_file(){
@@ -132,7 +177,7 @@ function install_file(){
 function uninstall_file(){
     local INSTANCE="$1"
     local FILE_NAME="$2"
-    lxc exec $INSTANCE -- rm -f $INSTANCE/$LIB_SYSTEM/$FILE_NAME
+    lxc file delete $INSTANCE/$LIB_SYSTEM/$FILE_NAME
 }
 
 function service_template(){
@@ -149,7 +194,7 @@ Conflicts=shutdown.target
 [Service]
 Type=oneshot
 Environment="TAKO=/run/tako/"
-ExecStart=$TAKO_INSTALLED_BINARY notify tako.d/systemd order=$ORDER
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd order=$ORDER
 
 [Install]
 WantedBy=tako.target
@@ -211,7 +256,7 @@ function gather_no_ops(){
     done
 }
 
-function gather_divide_conquer_disabled(){
+function gather_modified_order_simplified_disabled(){
     local ETC_SYSTEM=etc/systemd/system
     local LIB_SYSTEM=lib/systemd/system
     local MAIN_D=cloud-init-main.service.d
@@ -257,7 +302,75 @@ function gather_divide_conquer_disabled(){
     lxc file push $OVERRIDE_MAIN $INSTANCE/$LIB_SYSTEM/$MAIN_D/override.conf
 
     # re-run: no-op
-    clean_rerun $INSTANCE "divide-conquer-disabled" $GRAPHICAL
+    clean_rerun $INSTANCE "modified-order-simplified-disabled" $GRAPHICAL
+
+    # teardown
+    lxc exec $INSTANCE -- rm /etc/cloud/cloud-init.disabled
+    for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
+        lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
+    done
+    for DIR in $LOCAL_AFTER_D $NETWORK_AFTER_D $CONFIG_AFTER_D $FINAL_AFTER_D; do
+        lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
+    done
+
+    # delete "after services"
+    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-init-local-after.service
+    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-init-network-after.service
+    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-config-after.service
+    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-final-after.service
+    lxc exec $INSTANCE -- rm -rf /$LIB_SYSTEM/$MAIN_D
+
+    # undo generator
+    unbackup_generator
+}
+
+function gather_modified_order_simplified_no_op_disabled(){
+    local ETC_SYSTEM=etc/systemd/system
+    local LIB_SYSTEM=lib/systemd/system
+    local MAIN_D=cloud-init-main.service.d
+    local LOCAL_D="cloud-init-local.service.d"
+    local NETWORK_D="cloud-init-network.service.d"
+    local CONFIG_D="cloud-config.service.d"
+    local FINAL_D="cloud-final.service.d"
+    local LOCAL_AFTER_D="cloud-init-local-after.service.d"
+    local NETWORK_AFTER_D="cloud-init-network-after.service.d"
+    local CONFIG_AFTER_D="cloud-config-after.service.d"
+    local FINAL_AFTER_D="cloud-final-after.service.d"
+    local INSTANCE="$1"
+    local OVERRIDE_AFTER=$(mktemp)
+    local OVERRIDE_BEFORE=$(mktemp)
+    local OVERRIDE_MAIN=$(mktemp)
+    #
+    # setup
+    #
+    # remove generator
+    backup_generator
+
+    # override services with no-ops
+    printf '[Unit]\nAfter=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_AFTER
+    printf '[Unit]\nBefore=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_BEFORE
+    lxc exec $INSTANCE -- touch /etc/cloud/cloud-init.disabled
+    for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
+        lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
+        lxc file push $OVERRIDE_BEFORE $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
+    done
+    for DIR in $LOCAL_AFTER_D $NETWORK_AFTER_D $CONFIG_AFTER_D $FINAL_AFTER_D; do
+        lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
+        lxc file push $OVERRIDE_AFTER $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
+    done
+    # create "after services"
+    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-init-local.service /$LIB_SYSTEM/cloud-init-local-after.service
+    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-init-network.service /$LIB_SYSTEM/cloud-init-network-after.service
+    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-config.service /$LIB_SYSTEM/cloud-config-after.service
+    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-final.service /$LIB_SYSTEM/cloud-final-after.service
+
+    # override main
+    lxc exec $INSTANCE -- mkdir -p /$LIB_SYSTEM/$MAIN_D
+    printf '[Service]\nExecStart=\nExecStart=systemd-notify --ready --status "done"\n' > $OVERRIDE_MAIN
+    lxc file push $OVERRIDE_MAIN $INSTANCE/$LIB_SYSTEM/$MAIN_D/override.conf
+
+    # re-run: no-op
+    clean_rerun $INSTANCE "modified-order-simplified-no-op-disabled" $GRAPHICAL
 
     # teardown
     lxc exec $INSTANCE -- rm /etc/cloud/cloud-init.disabled
@@ -282,23 +395,23 @@ function gather_divide_conquer_disabled(){
 # NOTE: to check for notices run:
 #
 #     TAKO=/run/tako/ tako notices --key=tako.d/systemd
-function gather_tako_disabled(){
-    local ETC_SYSTEM=etc/systemd/system
+function gather_modified_order_generalized(){
     local LIB_SYSTEM=lib/systemd/system
-    local MAIN_D=cloud-init-main.service.d
-    local LOCAL_D="cloud-init-local.service.d"
-    local NETWORK_D="cloud-init-network.service.d"
-    local CONFIG_D="cloud-config.service.d"
-    local FINAL_D="cloud-final.service.d"
-    local LOCAL_AFTER_D="cloud-init-local-after.service.d"
-    local NETWORK_AFTER_D="cloud-init-network-after.service.d"
-    local CONFIG_AFTER_D="cloud-config-after.service.d"
-    local FINAL_AFTER_D="cloud-final-after.service.d"
-    local PERSISTENT_TEMP="/usr/local/temp/"
+    #local ETC_SYSTEM=etc/systemd/system
+    #local MAIN_D=cloud-init-main.service.d
+    #local LOCAL_D="cloud-init-local.service.d"
+    #local NETWORK_D="cloud-init-network.service.d"
+    #local CONFIG_D="cloud-config.service.d"
+    #local FINAL_D="cloud-final.service.d"
+    #local LOCAL_AFTER_D="cloud-init-local-after.service.d"
+    #local NETWORK_AFTER_D="cloud-init-network-after.service.d"
+    #local CONFIG_AFTER_D="cloud-config-after.service.d"
+    #local FINAL_AFTER_D="cloud-final-after.service.d"
     local INSTANCE="$1"
     local OVERRIDE_AFTER=$(mktemp)
     local OVERRIDE_BEFORE=$(mktemp)
     local OVERRIDE_MAIN=$(mktemp)
+    local PERSISTENT_TEMP="/usr/local/temp"
 
     # setup
     #
@@ -314,47 +427,8 @@ function gather_tako_disabled(){
     lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-final.service $PERSISTENT_TEMP
 
     # install new services
-    local tako_daemon=$(cat << EOD
-[Unit]
-Description=tako service
-DefaultDependencies=no
-
-# it might be possible to run without the next line, but I would need to
-# double check that /run/ is available for writing before, during, and after remounting filesystems
-# and this also risks some really weird bugs
-After=systemd-remount-fs.service
-Before=shutdown.target
-Conflicts=shutdown.target
-
-[Service]
-Environment="TAKO=/run/tako/"
-# This would probably eventually be of type notify, which is capable of
-# more richly notifying the init system of current status.
-Type=simple
-ExecStartPre=mkdir -p /run/tako
-ExecStart=$TAKO_INSTALLED_BINARY run
-# a putrid hack to prevent races with other services
-# Type=notify and sending a notify once socket is available is the right way to do this
-ExecStartPost=sh -c "until [ -S /run/tako/.tako.socket ]; do sleep 0.005; done"
-
-# Output needs to appear in instance console output
-StandardOutput=kmsg
-
-[Install]
-WantedBy=tako.target
-EOD
-)
-    local tako_target=$(cat << EOD
-[Unit]
-Description=Tako target
-
-[Install]
-WantedBy=multi-user.target
-EOD
-)
-
-    install_file $INSTANCE $TAKO.service "$tako_daemon"
-    install_file $INSTANCE tako.target "$tako_target"
+    install_file $INSTANCE $TAKO.service "$TAKO_DAEMON_SERVICE_CONTENT"
+    install_file $INSTANCE tako.target "$TAKO_TARGET_CONTENT"
 
     # strategy: ignore cloud-init services and duplicates
     #
@@ -424,17 +498,17 @@ EOD
     lxc file push $TAKO_LOCAL_BINARY $INSTANCE/$TAKO_INSTALLED_PATH/
 
     # re-run: no-op
-    clean_rerun $INSTANCE "tako" $GRAPHICAL
+    clean_rerun $INSTANCE "modified-order-generalized-disabled" $GRAPHICAL
 
     # teardown
     unbackup_generator
 
     # readadd all cloud-init services
-    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-init-main.service $LIB_SYSTEM
-    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-init-local.service $LIB_SYSTEM
-    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-init-network.service $LIB_SYSTEM
-    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-config.service $LIB_SYSTEM
-    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-final.service $LIB_SYSTEM
+    lxc exec $INSTANCE -- mv $PERSISTENT_TEMP/cloud-init-main.service /$LIB_SYSTEM
+    lxc exec $INSTANCE -- mv $PERSISTENT_TEMP/cloud-init-local.service /$LIB_SYSTEM
+    lxc exec $INSTANCE -- mv $PERSISTENT_TEMP/cloud-init-network.service /$LIB_SYSTEM
+    lxc exec $INSTANCE -- mv $PERSISTENT_TEMP/cloud-config.service /$LIB_SYSTEM
+    lxc exec $INSTANCE -- mv $PERSISTENT_TEMP/cloud-final.service /$LIB_SYSTEM
     lxc exec $INSTANCE -- rm -rf $PERSISTENT_TEMP
 
     # uninstall files
@@ -446,7 +520,7 @@ EOD
     lxc exec $INSTANCE -- rm -f /etc/systemd/system/multi-user.target.wants/cloud-init.target
 
     # install tako binary
-    lxc file push $TAKO_LOCAL_BINARY $INSTANCE/$TAKO_INSTALLED_PATH/
+    lxc file delete $INSTANCE/$TAKO_INSTALLED_BINARY
     uninstall_file $INSTANCE $TAKO.service
     uninstall_file $INSTANCE tako.target
 
@@ -504,7 +578,7 @@ EOD
     lxc exec $INSTANCE -- systemctl daemon-reload
 }
 
-function gather_divide_conquer_enabled(){
+function gather_modified_order_simplified_enabled(){
     local ETC_SYSTEM=etc/systemd/system
     local LIB_SYSTEM=lib/systemd/system
     local MAIN_D=cloud-init-main.service.d
@@ -549,7 +623,7 @@ function gather_divide_conquer_enabled(){
     lxc file push $OVERRIDE_MAIN $INSTANCE/$LIB_SYSTEM/$MAIN_D/override.conf
 
     # re-run: no-op
-    clean_rerun $INSTANCE "divide-conquer-enabled" $CLOUD_INIT
+    clean_rerun $INSTANCE "modified-order-simplified-enabled" $CLOUD_INIT
     for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
         lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
     done
@@ -620,15 +694,16 @@ function run_test(){
 
 
     # the following two measure enabled and are not as generally useful
-    # gather_divide_conquer_enabled $INSTANCE
+    # gather_modified_order_simplified_enabled $INSTANCE
     # gather_cached $INSTANCE
 
     #gather_no_ops $INSTANCE
     #gather_disabled $INSTANCE
     gather_disabled_no_generator $INSTANCE
     #gather_generator_no_op $INSTANCE
-    #gather_divide_conquer_disabled $INSTANCE
-    gather_tako_disabled $INSTANCE
+    #gather_modified_order_simplified_no_op_disabled $INSTANCE
+    #gather_modified_order_simplified_disabled $INSTANCE
+    gather_modified_order_generalized $INSTANCE
 
     lxc rm -f $INSTANCE
 }
@@ -638,7 +713,7 @@ function main(){
     for ITER in $(seq 0 30); do
         mkdir -p $RESULTS/$ITER
         echo "running iteration: $ITER"
-        for TYPE in vm; do  # container; do
+        for TYPE in container; do
             INSTANCE="$SERIES-$TYPE"
             if [[ $INSTANCE == "vm" ]]; then
                 COMMAND="$LAUNCH $INSTANCE --vm"
