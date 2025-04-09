@@ -93,7 +93,6 @@ def create_graph(graph, name):
     plt.savefig(OUTPUT_PNG, bbox_inches="tight")
     plt.savefig(OUTPUT_SVG, bbox_inches="tight")
 
-
     plt.show()
 
 

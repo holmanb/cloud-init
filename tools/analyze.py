@@ -12,6 +12,7 @@ DIR = "./out/"
 SERIES = "oracular"
 TYPE = "container"
 
+
 @dataclass
 class Statistics:
     mean: float
@@ -19,7 +20,6 @@ class Statistics:
     range: float
     stdev: float
     name: str
-
 
 
 def iter_files(output_type: str, instrumented_type: str):
@@ -45,9 +45,11 @@ def analyze_systemd_analyze(instrumented_type: str):
         stdev=stdev(analyze_times),
     )
 
+
 if __name__ == "__main__":
-    print(analyze_systemd_analyze("cached"))
-    print(analyze_systemd_analyze("divide-conquer-enabled"))
+    # print(analyze_systemd_analyze("cached"))
+    # print(analyze_systemd_analyze("divide-conquer-enabled"))
     print(analyze_systemd_analyze("disabled"))
     print(analyze_systemd_analyze("no-op"))
     print(analyze_systemd_analyze("divide-conquer-disabled"))
+    print(analyze_systemd_analyze("tako"))
