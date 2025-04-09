@@ -18,8 +18,16 @@ RESULTS=out
 # CLOUD_INIT is the cloud-init target
 CLOUD_INIT=cloud-init
 
-# TAKO_BINARY_PATH is the path of the pre-built tako binary
-TAKO_BINARY_PATH=$HOME/upstream/tako/tako
+# CLOUD_INIT is the graphical target
+GRAPHICAL=graphical
+
+TAKO="tako"
+# TAKO_BINARY_BINARY is the path of the pre-built tako binary
+TAKO_LOCAL_BINARY=$HOME/upstream/tako/tako
+
+TAKO_INSTALLED_PATH="/usr/libexec"
+
+TAKO_INSTALLED_BINARY="$TAKO_INSTALLED_PATH/$TAKO"
 
 # wait_for_target manually waits since cloud-init status --wait is insufficient:
 # 1) `lxc exec` fails when vm isn't booted yet
@@ -210,10 +218,34 @@ function install_file(){
     local INSTANCE="$1"
     local FILE_NAME="$2"
     local CONTENT="$3"
-    echo $CONTENT > $TEMP_SERVICE
+    echo "$CONTENT" > $TEMP_SERVICE
     lxc file push $TEMP_SERVICE $INSTANCE/$LIB_SYSTEM/$FILE_NAME
 }
 
+function service_template(){
+    local ORDER="$1"
+    cat << EOD
+[Unit]
+Description=tako client wrapper service: $ORDER
+DefaultDependencies=no
+$ORDER
+# depends on the tako socket
+After=$TAKO.service
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+Environment="TAKO=/run/tako/"
+ExecStart=$TAKO_INSTALLED_BINARY notify tako.d/systemd order=$ORDER
+
+[Install]
+WantedBy=tako.target
+EOD
+}
+
+# NOTE: to check for notices run:
+#
+#     tako notices --key=tako.d/systemd
 function gather_tako_disabled(){
     local ETC_SYSTEM=etc/systemd/system
     local LIB_SYSTEM=lib/systemd/system
@@ -226,47 +258,12 @@ function gather_tako_disabled(){
     local NETWORK_AFTER_D="cloud-init-network-after.service.d"
     local CONFIG_AFTER_D="cloud-config-after.service.d"
     local FINAL_AFTER_D="cloud-final-after.service.d"
-    local TAKO_INSTALLED_PATH="/usr/libexec/"
     local PERSISTENT_TEMP="/usr/local/temp/"
     local INSTANCE="$1"
     local OVERRIDE_AFTER=$(mktemp)
     local OVERRIDE_BEFORE=$(mktemp)
     local OVERRIDE_MAIN=$(mktemp)
-# /usr/lib/systemd/system/cloud-init-main.service
-# systemd ordering resources
-# ==========================
-# https://systemd.io/NETWORK_ONLINE/
-# https://docs.cloud-init.io/en/latest/explanation/boot.html
-# https://www.freedesktop.org/wiki/Software/systemd/NetworkTarget/
-# https://www.freedesktop.org/software/systemd/man/latest/systemd.special.html
-# https://www.freedesktop.org/software/systemd/man/latest/systemd-remount-fs.service.html
-#[Unit]
-#Description=Cloud-init: Single Process
-#DefaultDependencies=no
-#
-#After=systemd-remount-fs.service
-#Before=cloud-init-local.service
-#Before=shutdown.target
-#Conflicts=shutdown.target
-#RequiresMountsFor=/var/lib/cloud
-#ConditionPathExists=!/etc/cloud/cloud-init.disabled
-#ConditionKernelCommandLine=!cloud-init=disabled
-#ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
-#
-#[Service]
-#Type=notify
-#ExecStart=/usr/bin/cloud-init --all-stages
-#KillMode=process
-#TasksMax=infinity
-#TimeoutStartSec=infinity
-#
-## Output needs to appear in instance console output
-#StandardOutput=journal+console
-#
-#[Install]
-#WantedBy=cloud-init.target
 
-    #
     # setup
     #
     # remove all services
@@ -276,81 +273,115 @@ function gather_tako_disabled(){
     lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-init-network.service $PERSISTENT_TEMP
     lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-config.service $PERSISTENT_TEMP
     lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-final.service $PERSISTENT_TEMP
-    #lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-config.target $PERSISTENT_TEMP
-    #lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-init.target $PERSISTENT_TEMP
 
     local tako_daemon=$(cat << EOD
 [Unit]
-Description=tako daemon
+Description=tako service
 DefaultDependencies=no
 
+# it might be possible to run without the next line, but I would need to
+# double check that /run/ is available for writing before, during, and after remounting filesystems
+# and this also risks some really weird bugs
 After=systemd-remount-fs.service
 Before=shutdown.target
 Conflicts=shutdown.target
 
 [Service]
 Environment="TAKO=/run/tako/"
+# This would probably eventually be of type notify, which is capable of
+# more richly notifying the init system of current status.
 Type=simple
 ExecStartPre=mkdir -p /run/tako
-ExecStart=$TAKO_INSTALLED_PATH run
+ExecStart=$TAKO_INSTALLED_BINARY run
 
 # Output needs to appear in instance console output
 StandardOutput=kmsg
 
 [Install]
-WantedBy=cloud-init.target
+WantedBy=tako.target
 EOD
 )
-    local local_before_hv=$(cat << EOD
+    local tako_target=$(cat << EOD
 [Unit]
-Description=tako client wrapper service: hv_kvp_daemon.service
-DefaultDependencies=no
-
-After=systemd-remount-fs.service
-Before=shutdown.target
-Conflicts=shutdown.target
-
-[Service]
-Environment="TAKO=/run/tako/"
-Type=simple
-ExecStartPre=mkdir -p /run/tako
-ExecStart=$TAKO_INSTALLED_PATH run
-
-# Output needs to appear in instance console output
-StandardOutput=kmsg
+Description=Tako target
 
 [Install]
-WantedBy=cloud-init.target
+WantedBy=multi-user.target
 EOD
 )
-    install_file $INSTANCE tako-daemon.service $tako_daemon
 
-    # enable cloud-init
-    lxc exec $INSTANCE -- systemctl enable cloud-init.target
+    install_file $INSTANCE $TAKO.service "$tako_daemon"
+    install_file $INSTANCE tako.target "$tako_target"
+
+    # strategy: ignore cloud-init services and duplicates
+    #
+    # client wrappers: local
+    #
+    # Wants=network-pre.target
+    # After=hv_kvp_daemon.service
+    # Before=network-pre.target
+    # Before=shutdown.target
+    # Before=sysinit.target
+    install_file $INSTANCE tako-local-after-hv.service "$(service_template 'After=hv_kvp_daemon.service')"
+    install_file $INSTANCE tako-local-before-sysinit.service "$(service_template 'Before=sysinit.target')"
+    install_file $INSTANCE tako-local-before-network-pre.service "$(service_template 'Before=network-pre.target')"
+    install_file $INSTANCE tako-local-before-shutdown.service "$(service_template 'Before=shutdown.target')"
+
+    #
+    # client wrappers: network
+    #
+    # After=systemd-networkd-wait-online.service
+    # After=networking.service
+    # Before=network-online.target
+    # Before=sshd-keygen.service
+    # Before=sshd.service
+    # Before=systemd-user-sessions.service
+    # Before=sysinit.target                      # duplicate
+    # Before=shutdown.target                     # duplicate
+    install_file $INSTANCE tako-network-after-networkd-wait-online.service "$(service_template 'After=systemd-networkd-wait-online.service')"
+    install_file $INSTANCE tako-network-after-networking.service "$(service_template 'After=networking.service')"
+    install_file $INSTANCE tako-network-before-network-online.service "$(service_template 'Before=network-online.target')"
+    install_file $INSTANCE tako-network-before-sshd.service "$(service_template 'Before=ssh.service')"
+    install_file $INSTANCE tako-network-before-user-sessions.service "$(service_template 'Before=systemd-user-sessions.service')"
+
+    # BOUNTY: $50 (expires in 2030)
+    #
+    # I have literally never seen proof of the existence of this service.
+    # If anyone has evidence of the history of this service (besides the commit that introduced it), please provide proof and payment method
+    # to Brett Holman to collect your reward.
+    install_file $INSTANCE tako-network-before-sshd-keygen.service "$(service_template 'Before=sshd-keygen.service')"
+
+    #
+    # client wrappers: config
+    #
+    # After=network-online.target
+    install_file $INSTANCE tako-config-after-network-online.service "$(service_template 'After=network-online.target')"
+
+    #
+    # client wrappers: final
+    #
+    # After=network-online.target  # duplicate
+    # After=time-sync.target
+    # After=rc-local.service
+    # After=multi-user.target
+    # Before=apt-daily.service
+    install_file $INSTANCE tako-final-after-time-sync.target "$(service_template 'After=time-sync.target')"
+    install_file $INSTANCE tako-final-after-rc-local.service "$(service_template 'After=rc-local.service')"
+    install_file $INSTANCE tako-final-after-multi-user.target "$(service_template 'After=multi-user.target')"
+    install_file $INSTANCE tako-final-before-apt-daily.service "$(service_template 'Before=apt-daily.service')"
+
+    lxc exec $INSTANCE -- systemctl daemon-reload
+    lxc exec $INSTANCE -- systemctl enable tako.target
+
+    # enable cloud-init - no [Install] section, so fry an egg with a magnifying glass
+    lxc exec $INSTANCE -- ln -s /lib/systemd/system/cloud-init.target /etc/systemd/system/multi-user.target.wants/cloud-init.target
+    #lxc exec $INSTANCE -- ln -s /lib/systemd/system/tako.target /etc/systemd/system/multi-user.target.wants/tako.target
 
     # install tako binary
-    lxc file push $TAKO_BINARY_PATH $INSTANCE/$TAKO_INSTALLED_PATH
-
-
-    #printf '[Unit]\nAfter=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_AFTER
-    #printf '[Unit]\nBefore=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_BEFORE
-    #lxc exec $INSTANCE -- touch /etc/cloud/cloud-init.disabled
-    #for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
-    #    lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
-    #    lxc file push $OVERRIDE_BEFORE $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
-    #done
-    #for DIR in $LOCAL_AFTER_D $NETWORK_AFTER_D $CONFIG_AFTER_D $FINAL_AFTER_D; do
-    #    lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
-    #    lxc file push $OVERRIDE_AFTER $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
-    #done
-    # override main
-    #lxc exec $INSTANCE -- mkdir -p /$LIB_SYSTEM/$MAIN_D
-    #printf '[Service]\nExecStart=\nExecStart=systemd-notify --ready --status "done"\n' > $OVERRIDE_MAIN
-    #lxc file push $OVERRIDE_MAIN $INSTANCE/$LIB_SYSTEM/$MAIN_D/override.conf
+    lxc file push $TAKO_LOCAL_BINARY $INSTANCE/$TAKO_INSTALLED_PATH/
 
     # re-run: no-op
-    clean_rerun $INSTANCE "divide-conquer-disabled" $GRAPHICAL
-
+    clean_rerun $INSTANCE "tako" $GRAPHICAL
 }
 
 function gather_divide_conquer_enabled(){
@@ -452,30 +483,35 @@ function run_test(){
 
     gather_first_boot $INSTANCE "$COMMAND"
 
-    gather_no_ops $INSTANCE
-    gather_disabled $INSTANCE
-    gather_generator_no_op $INSTANCE
-    gather_cached $INSTANCE
-    gather_divide_conquer_disabled $INSTANCE
-    gather_divide_conquer_enabled $INSTANCE
+    #gather_no_ops $INSTANCE
+    #gather_disabled $INSTANCE
+    #gather_generator_no_op $INSTANCE
+    #gather_cached $INSTANCE
+    #gather_divide_conquer_disabled $INSTANCE
+    #gather_divide_conquer_enabled $INSTANCE
     gather_tako_disabled $INSTANCE
 
     lxc rm -f $INSTANCE
 }
 
-# seeking statistical significance
-for ITER in $(seq 0 30); do
-    mkdir -p $RESULTS/$ITER
-    echo "running iteration: $ITER"
-    for TYPE in container; do #vm; do  # container; do
-        INSTANCE="$SERIES-$TYPE"
-        if [[ $INSTANCE == "vm" ]]; then
-            COMMAND="$LAUNCH $INSTANCE --vm"
-        else
-            COMMAND="$LAUNCH $INSTANCE"
-        fi
-        lxc rm -f $INSTANCE 2>/dev/null || true
-        run_test $INSTANCE "$COMMAND" $RESULTS/$ITER
-        exit 0
+function main(){
+    # seeking statistical significance
+    for ITER in $(seq 0 30); do
+        mkdir -p $RESULTS/$ITER
+        echo "running iteration: $ITER"
+        for TYPE in container; do #vm; do  # container; do
+            INSTANCE="$SERIES-$TYPE"
+            if [[ $INSTANCE == "vm" ]]; then
+                COMMAND="$LAUNCH $INSTANCE --vm"
+            else
+                COMMAND="$LAUNCH $INSTANCE"
+            fi
+            lxc rm -f $INSTANCE 2>/dev/null || true
+            run_test $INSTANCE "$COMMAND" $RESULTS/$ITER
+        done
     done
-done
+}
+
+if [ "$1" = "run" ]; then
+    main
+fi
