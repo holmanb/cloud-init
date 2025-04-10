@@ -10,7 +10,7 @@ FIRST = 0
 LAST = 30
 DIR = "./out/"
 SERIES = "oracular"
-TYPE = "container"
+TYPE = "vm"
 
 
 @dataclass
@@ -47,12 +47,19 @@ def analyze_systemd_analyze(instrumented_type: str):
 
 
 if __name__ == "__main__":
+    # enabled cases
+    #
     # print(analyze_systemd_analyze("cached")) # this measures enabled cloud-init, not useful
     # print(analyze_systemd_analyze("divide-conquer-enabled"))
+    # print(analyze_systemd_analyze("disabled-no-generator"))
+
     print(analyze_systemd_analyze("no-op"))
     print(analyze_systemd_analyze("disabled"))
-    print(analyze_systemd_analyze("disabled-no-generator"))
-    print(analyze_systemd_analyze("tako"))
-    #print(analyze_systemd_analyze("modified-order-generalized-disabled"))
-    #print(analyze_systemd_analyze("modified-order-simplified-disabled"))
-    #print(analyze_systemd_analyze("modified-order-simplified-no-op-disabled"))
+    print(analyze_systemd_analyze("modified-order-generalized-disabled"))
+    print(analyze_systemd_analyze("modified-order-simplified-disabled"))
+
+    # not measured recently
+    # print(analyze_systemd_analyze("modified-order-simplified-no-op-disabled"))
+
+    # old name
+    # print(analyze_systemd_analyze("tako"))

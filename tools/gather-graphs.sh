@@ -36,16 +36,16 @@ TAKO_INSTALLED_PATH="usr/libexec"
 
 TAKO_INSTALLED_BINARY="$TAKO_INSTALLED_PATH/$TAKO"
 
-TAKO_TARGET_CONTENT=$(cat << EOD
+TAKO_TARGET_CONTENT=$(cat << EOF
 [Unit]
 Description=Tako target
 
 [Install]
 WantedBy=multi-user.target
-EOD
+EOF
 )
 
-TAKO_DAEMON_SERVICE_CONTENT=$(cat << EOD
+TAKO_DAEMON_SERVICE_CONTENT=$(cat << EOF
 [Unit]
 Description=tako service
 DefaultDependencies=no
@@ -73,9 +73,316 @@ StandardOutput=kmsg
 
 [Install]
 WantedBy=tako.target
-EOD
+EOF
 )
 
+CLOUD_INIT_LOCAL_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Local Stage (pre-network)
+DefaultDependencies=no
+Wants=network-pre.target
+Wants=tako.service
+After=tako.service
+Before=network-pre.target
+Before=shutdown.target
+Before=sysinit.target
+Conflicts=shutdown.target
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-init-local.service
+RemainAfterExit=yes
+TimeoutSec=0
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_LOCAL_AFTER_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Local Stage (pre-network)
+DefaultDependencies=no
+Wants=network-pre.target
+Wants=tako.service
+After=tako.service
+After=hv_kvp_daemon.service
+Conflicts=shutdown.target
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-init-local-after.service
+RemainAfterExit=yes
+TimeoutSec=0
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_NETWORK_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Network Stage
+DefaultDependencies=no
+Wants=cloud-init-local.service
+Wants=sshd-keygen.service
+Wants=sshd.service
+After=tako.service
+Before=network-online.target
+Before=sshd-keygen.service
+Before=sshd.service
+Before=systemd-user-sessions.service
+Before=sysinit.target
+Before=shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-init-network.service
+RemainAfterExit=yes
+TimeoutSec=0
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_NETWORK_AFTER_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Network Stage
+DefaultDependencies=no
+Wants=cloud-init-local.service
+Wants=sshd-keygen.service
+Wants=sshd.service
+After=tako.service
+After=cloud-init-local.service
+After=systemd-networkd-wait-online.service
+After=networking.service
+Conflicts=shutdown.target
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-init-network-after.service
+RemainAfterExit=yes
+TimeoutSec=0
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_CONFIG_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Config Stage
+Wants=network-online.target cloud-config.target
+After=tako.service
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-config.service
+RemainAfterExit=yes
+TimeoutSec=0
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_CONFIG_AFTER_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Config Stage
+After=network-online.target cloud-config.target
+After=tako.service
+Wants=network-online.target cloud-config.target
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-config-after.service
+RemainAfterExit=yes
+TimeoutSec=0
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_FINAL_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Final Stage
+After=tako.service
+Before=apt-daily.service
+Wants=network-online.target cloud-config.service
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-init-final.service
+RemainAfterExit=yes
+TimeoutSec=0
+TasksMax=infinity
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+CLOUD_INIT_FINAL_AFTER_CONTENT=$(cat << EOF
+[Unit]
+# https://docs.cloud-init.io/en/latest/explanation/boot.html
+Description=Cloud-init: Final Stage
+After=tako.service
+After=network-online.target time-sync.target cloud-config.service rc-local.service
+After=multi-user.target
+Wants=network-online.target cloud-config.service
+ConditionPathExists=!/etc/cloud/cloud-init.disabled
+ConditionKernelCommandLine=!cloud-init=disabled
+ConditionEnvironment=!KERNEL_CMDLINE=cloud-init=disabled
+
+
+[Service]
+Environment="TAKO=/run/tako/"
+Type=oneshot
+# This service is a shim which preserves systemd ordering while allowing a
+# single Python process to run cloud-init's logic. This works by communicating
+# with the cloud-init process over a unix socket to tell the process that this
+# stage can start, and then wait on a return socket until the cloud-init
+# process has completed this stage. The output from the return socket is piped
+# into a shell so that the process can send a completion message (defaults to
+# "done", otherwise includes an error message) and an exit code to systemd.
+ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd stage=cloud-init-final-after.service
+RemainAfterExit=yes
+TimeoutSec=0
+TasksMax=infinity
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
+
+DAEMON_RELOAD_CONTENT=$(cat << EOF
+[Unit]
+Description=Daemon reload
+DefaultDependencies=no
+Before=cloud-init-main.service
+
+[Service]
+ExecStart=systemctl daemon-reload
+
+# Output needs to appear in instance console output
+StandardOutput=journal+console
+
+[Install]
+WantedBy=cloud-init.target
+EOF
+)
 #
 # utility functions
 #
@@ -86,41 +393,47 @@ EOD
 #    are overridden.
 # 3) sometimes we need to wait when cloud-init is disabled
 function wait_for_target(){
+    # disable debug logging when waiting for target
+    set +x
     local INSTANCE=$1
     local TARGET=$2
     local total=0
     while true; do
         # work around exec before dbus is available
         set +e
-        lxc exec $INSTANCE -- systemctl is-active $TARGET.target 2>/dev/null
+        lxc exec $INSTANCE -- systemctl is-active $TARGET.target &>/dev/null
         local rc=$?
         set -e
         if [ $rc = 1 ]; then
-            echo "waiting for dbus ${total}s"
+            echo "WAITING: dbus ${total}s"
         elif [ $rc = 3 ]; then
-            echo "waiting for dbus ${total}s"
+            echo "WAITING: dbus ${total}s"
         elif [ $rc = 255 ];then
-            echo "vm not booted yet ${total}s"
-        elif lxc exec $INSTANCE -- systemctl is-system-running | grep running; then
+            echo "WAITING: vm not booted yet ${total}s"
+        elif lxc exec $INSTANCE -- systemctl is-system-running | grep running &> /dev/null; then
+            echo "DONE"
+            set -x
             return
-        elif lxc exec $INSTANCE -- systemctl is-active $TARGET.target | grep active; then
+        elif lxc exec $INSTANCE -- systemctl is-active $TARGET.target | grep active &> /dev/null; then
             # manually check if cloud-init.target is active yet
-            echo "almost booted, but not quite done"
+            echo "WAITING: almost booted, but not quite done"
         else
-            echo "inactive ${total}s"
+            echo "WAITING: inactive ${total}s"
         fi
         sleep 1
         total=$(( total + 1))
         if [[ $total -ge 150 ]]; then
-            notify "getting slow"
+            notify "ERROR: getting slow"
             lxc exec $INSTANCE -- sh -c "systemctl list-jobs"
         fi
     done
 }
 
 function gather(){
+    set +x
     local INSTANCE=$1
     local OUT=$2
+    echo "GATHERING"
 
     mkdir -p $OUT
     # TODO use image serial as file name via:
@@ -136,11 +449,7 @@ function gather(){
     lxc exec $INSTANCE -- systemd-analyze > $OUT/analyze.txt
     lxc exec $INSTANCE -- systemd-analyze blame > $OUT/blame.txt
     lxc exec $INSTANCE -- systemd-analyze dump > $OUT/dump.txt
-
-    # remove the cache and reload the daemon
-    #lxc exec $INSTANCE -- rm -rf /run/cloud-init/
-    #lxc exec $INSTANCE -- time -o tmp systemctl daemon-reload
-    #lxc exec $INSTANCE -- cat tmp > $OUT/uncached-reload.txt
+    set -x
 }
 
 function clean_rerun(){
@@ -148,6 +457,7 @@ function clean_rerun(){
     local FLAVOR=$2
     local WAIT_TARGET=$3
 
+    echo "LAUNCHING: instrumentation=$FLAVOR instance=$INSTANCE"
     lxc exec $INSTANCE -- cloud-init clean --machine-id --logs
     lxc stop $INSTANCE
 
@@ -182,7 +492,7 @@ function uninstall_file(){
 
 function service_template(){
     local ORDER="$1"
-    cat << EOD
+    cat << EOF
 [Unit]
 Description=tako client wrapper service: $ORDER
 DefaultDependencies=no
@@ -198,7 +508,7 @@ ExecStart=/$TAKO_INSTALLED_BINARY notify tako.d/systemd order=$ORDER
 
 [Install]
 WantedBy=tako.target
-EOD
+EOF
 }
 
 # unused
@@ -268,6 +578,7 @@ function gather_modified_order_simplified_disabled(){
     local NETWORK_AFTER_D="cloud-init-network-after.service.d"
     local CONFIG_AFTER_D="cloud-config-after.service.d"
     local FINAL_AFTER_D="cloud-final-after.service.d"
+    local PERSISTENT_TEMP="/usr/local/temp"
     local INSTANCE="$1"
     local OVERRIDE_AFTER=$(mktemp)
     local OVERRIDE_BEFORE=$(mktemp)
@@ -278,23 +589,36 @@ function gather_modified_order_simplified_disabled(){
     # remove generator
     backup_generator
 
-    # override services with no-ops
-    printf '[Unit]\nAfter=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_AFTER
-    printf '[Unit]\nBefore=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_BEFORE
-    lxc exec $INSTANCE -- touch /etc/cloud/cloud-init.disabled
-    for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
-        lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
-        lxc file push $OVERRIDE_BEFORE $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
-    done
-    for DIR in $LOCAL_AFTER_D $NETWORK_AFTER_D $CONFIG_AFTER_D $FINAL_AFTER_D; do
-        lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
-        lxc file push $OVERRIDE_AFTER $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
-    done
-    # create "after services"
-    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-init-local.service /$LIB_SYSTEM/cloud-init-local-after.service
-    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-init-network.service /$LIB_SYSTEM/cloud-init-network-after.service
-    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-config.service /$LIB_SYSTEM/cloud-config-after.service
-    lxc exec $INSTANCE -- cp /$LIB_SYSTEM/cloud-final.service /$LIB_SYSTEM/cloud-final-after.service
+    # install new services
+    install_file $INSTANCE $TAKO.service "$TAKO_DAEMON_SERVICE_CONTENT"
+    install_file $INSTANCE tako.target "$TAKO_TARGET_CONTENT"
+
+    # enable targets
+    lxc exec $INSTANCE -- systemctl daemon-reload
+    lxc exec $INSTANCE -- systemctl enable tako.target
+
+    # no [Install] section, so fry an egg with a magnifying glass
+    lxc exec $INSTANCE -- ln -s /lib/systemd/system/cloud-init.target /etc/systemd/system/multi-user.target.wants/cloud-init.target
+
+    # install tako binary
+    lxc file push $TAKO_LOCAL_BINARY $INSTANCE/$TAKO_INSTALLED_PATH/
+
+    # backup services
+    lxc exec $INSTANCE -- mkdir -p $PERSISTENT_TEMP
+    lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-init-local.service /$PERSISTENT_TEMP/cloud-init-local.service
+    lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-init-network.service /$PERSISTENT_TEMP/cloud-init-network.service
+    lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-config.service /$PERSISTENT_TEMP/cloud-config.service
+    lxc exec $INSTANCE -- mv /$LIB_SYSTEM/cloud-final.service /$PERSISTENT_TEMP/cloud-final.service
+
+    # install services
+    install_file $INSTANCE cloud-init-local.service "$CLOUD_INIT_LOCAL_CONTENT"
+    install_file $INSTANCE cloud-init-local-after.service "$CLOUD_INIT_LOCAL_AFTER_CONTENT"
+    install_file $INSTANCE cloud-init-network.service "$CLOUD_INIT_NETWORK_CONTENT"
+    install_file $INSTANCE cloud-init-network-after.service "$CLOUD_INIT_NETWORK_AFTER_CONTENT"
+    install_file $INSTANCE cloud-config.service "$CLOUD_INIT_CONFIG_CONTENT"
+    install_file $INSTANCE cloud-config-after.service "$CLOUD_INIT_CONFIG_AFTER_CONTENT"
+    install_file $INSTANCE cloud-final.service "$CLOUD_INIT_FINAL_CONTENT"
+    install_file $INSTANCE cloud-final-after.service "$CLOUD_INIT_FINAL_AFTER_CONTENT"
 
     # override main
     lxc exec $INSTANCE -- mkdir -p /$LIB_SYSTEM/$MAIN_D
@@ -305,23 +629,43 @@ function gather_modified_order_simplified_disabled(){
     clean_rerun $INSTANCE "modified-order-simplified-disabled" $GRAPHICAL
 
     # teardown
-    lxc exec $INSTANCE -- rm /etc/cloud/cloud-init.disabled
-    for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
-        lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
-    done
-    for DIR in $LOCAL_AFTER_D $NETWORK_AFTER_D $CONFIG_AFTER_D $FINAL_AFTER_D; do
-        lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
-    done
+    # for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
+    #     lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
+    # done
+    # for DIR in $LOCAL_AFTER_D $NETWORK_AFTER_D $CONFIG_AFTER_D $FINAL_AFTER_D; do
+    #     lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
+    # done
 
-    # delete "after services"
-    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-init-local-after.service
-    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-init-network-after.service
-    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-config-after.service
-    lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-final-after.service
-    lxc exec $INSTANCE -- rm -rf /$LIB_SYSTEM/$MAIN_D
+    # reinstate originals
+    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-init-local.service /$LIB_SYSTEM/cloud-init-local.service
+    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-init-network.service /$LIB_SYSTEM/cloud-init-network.service
+    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-config.service /$LIB_SYSTEM/cloud-config.service
+    lxc exec $INSTANCE -- mv /$PERSISTENT_TEMP/cloud-final.service /$LIB_SYSTEM/cloud-final.service
+
+    # remove unwanted
+    lxc exec $INSTANCE -- rm /$LIB_SYSTEM/cloud-init-local-after.service
+    lxc exec $INSTANCE -- rm /$LIB_SYSTEM/cloud-init-network-after.service
+    lxc exec $INSTANCE -- rm /$LIB_SYSTEM/cloud-config-after.service
+    lxc exec $INSTANCE -- rm /$LIB_SYSTEM/cloud-final-after.service
 
     # undo generator
     unbackup_generator
+
+    # enable targets
+    lxc exec $INSTANCE -- systemctl disable tako.target
+
+    # no [Install] section, so fry an egg with a magnifying glass
+    lxc exec $INSTANCE -- rm /etc/systemd/system/multi-user.target.wants/cloud-init.target
+
+    # install tako binary
+    lxc file delete $INSTANCE/$TAKO_INSTALLED_BINARY
+
+    # uninstall new services
+    uninstall_file $INSTANCE $TAKO.service
+    uninstall_file $INSTANCE tako.target
+
+    lxc exec $INSTANCE -- systemctl daemon-reload
+
 }
 
 function gather_modified_order_simplified_no_op_disabled(){
@@ -346,10 +690,12 @@ function gather_modified_order_simplified_no_op_disabled(){
     # remove generator
     backup_generator
 
+    # no [Install] section, so fry an egg with a magnifying glass
+    lxc exec $INSTANCE -- ln -s /lib/systemd/system/cloud-init.target /etc/systemd/system/multi-user.target.wants/cloud-init.target
+
     # override services with no-ops
     printf '[Unit]\nAfter=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_AFTER
     printf '[Unit]\nBefore=\n\n[Service]\nExecStart=\nExecStart=true\n' > $OVERRIDE_BEFORE
-    lxc exec $INSTANCE -- touch /etc/cloud/cloud-init.disabled
     for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
         lxc exec $INSTANCE -- mkdir -p /$ETC_SYSTEM/$DIR
         lxc file push $OVERRIDE_BEFORE $INSTANCE/$ETC_SYSTEM/$DIR/override.conf
@@ -373,7 +719,6 @@ function gather_modified_order_simplified_no_op_disabled(){
     clean_rerun $INSTANCE "modified-order-simplified-no-op-disabled" $GRAPHICAL
 
     # teardown
-    lxc exec $INSTANCE -- rm /etc/cloud/cloud-init.disabled
     for DIR in $LOCAL_D $NETWORK_D $CONFIG_D $FINAL_D; do
         lxc exec $INSTANCE -- rm -rf /$ETC_SYSTEM/$DIR
     done
@@ -388,6 +733,9 @@ function gather_modified_order_simplified_no_op_disabled(){
     lxc exec $INSTANCE -- rm -f /$LIB_SYSTEM/cloud-final-after.service
     lxc exec $INSTANCE -- rm -rf /$LIB_SYSTEM/$MAIN_D
 
+    # no [Install] section, so fry an egg with a magnifying glass
+    lxc exec $INSTANCE -- rm -f /etc/systemd/system/multi-user.target.wants/cloud-init.target
+
     # undo generator
     unbackup_generator
 }
@@ -397,16 +745,6 @@ function gather_modified_order_simplified_no_op_disabled(){
 #     TAKO=/run/tako/ tako notices --key=tako.d/systemd
 function gather_modified_order_generalized(){
     local LIB_SYSTEM=lib/systemd/system
-    #local ETC_SYSTEM=etc/systemd/system
-    #local MAIN_D=cloud-init-main.service.d
-    #local LOCAL_D="cloud-init-local.service.d"
-    #local NETWORK_D="cloud-init-network.service.d"
-    #local CONFIG_D="cloud-config.service.d"
-    #local FINAL_D="cloud-final.service.d"
-    #local LOCAL_AFTER_D="cloud-init-local-after.service.d"
-    #local NETWORK_AFTER_D="cloud-init-network-after.service.d"
-    #local CONFIG_AFTER_D="cloud-config-after.service.d"
-    #local FINAL_AFTER_D="cloud-final-after.service.d"
     local INSTANCE="$1"
     local OVERRIDE_AFTER=$(mktemp)
     local OVERRIDE_BEFORE=$(mktemp)
@@ -678,10 +1016,28 @@ function gather_generator_no_op(){
     backup_generator
 
     # re-run: generator no-op
-    clean_rerun $INSTANCE "generator-no-op" $CLOUD_INIT
+    clean_rerun $INSTANCE "generator-no-op" $GRAPHICAL
 
     # teardown
     unbackup_generator
+}
+
+function gather_daemon_reload(){
+    local INSTANCE="$1"
+
+    # setup
+    backup_generator
+    # no [Install] section, so fry an egg with a magnifying glass
+    lxc exec $INSTANCE -- ln -s /lib/systemd/system/cloud-init.target /etc/systemd/system/multi-user.target.wants/cloud-init.target
+    install_file $INSTANCE cloud-init-local.service "$DAEMON_RELOAD_CONTENT"
+
+    # re-run: generator no-op
+    clean_rerun $INSTANCE "daemon-reload" $CLOUD_INIT
+
+    # teardown
+    lxc exec $INSTANCE -- rm -f /etc/systemd/system/multi-user.target.wants/cloud-init.target
+    unbackup_generator
+    uninstall_file $INSTANCE cloud-init-local.service
 }
 
 function run_test(){
@@ -697,13 +1053,17 @@ function run_test(){
     # gather_modified_order_simplified_enabled $INSTANCE
     # gather_cached $INSTANCE
 
-    #gather_no_ops $INSTANCE
-    #gather_disabled $INSTANCE
-    gather_disabled_no_generator $INSTANCE
+    # different disabled strategies
+    #gather_disabled_no_generator $INSTANCE
     #gather_generator_no_op $INSTANCE
     #gather_modified_order_simplified_no_op_disabled $INSTANCE
+    gather_daemon_reload $INSTANCE
+
+
+    #gather_no_ops $INSTANCE
+    #gather_disabled $INSTANCE
     #gather_modified_order_simplified_disabled $INSTANCE
-    gather_modified_order_generalized $INSTANCE
+    #gather_modified_order_generalized $INSTANCE
 
     lxc rm -f $INSTANCE
 }
@@ -712,10 +1072,10 @@ function main(){
     # seeking statistical significance
     for ITER in $(seq 0 30); do
         mkdir -p $RESULTS/$ITER
-        echo "running iteration: $ITER"
+        echo "ITER: $ITER"
         for TYPE in container; do
             INSTANCE="$SERIES-$TYPE"
-            if [[ $INSTANCE == "vm" ]]; then
+            if [[ $TYPE == "vm" ]]; then
                 COMMAND="$LAUNCH $INSTANCE --vm"
             else
                 COMMAND="$LAUNCH $INSTANCE"
