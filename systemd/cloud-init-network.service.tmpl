@@ -21,12 +21,7 @@ After=networking.service
 After=NetworkManager.service
 After=NetworkManager-wait-online.service
 {% endif %}
-{% if variant in ["suse"] %}
 After=wicked.service
-# setting hostname via hostnamectl depends on dbus, which otherwise
-# would not be guaranteed at this point.
-After=dbus.service
-{% endif %}
 Before=network-online.target
 {% if variant == "raspberry-pi-os" %}
 Before=avahi-daemon.service
