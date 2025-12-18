@@ -159,27 +159,9 @@ class DataSourceEc2(sources.DataSource):
             if len(candidate_nics) < 1:
                 LOG.error("The instance must have at least one eligible NIC")
                 return False
-            for candidate_nic in candidate_nics:
-                try:
-                    with EphemeralIPNetwork(
-                        self.distro,
-                        candidate_nic,
-                        ipv4=True,
-                        ipv6=True,
-                    ) as netw:
-                        self._crawled_metadata = self.crawl_metadata()
-                        if self._crawled_metadata:
-                            self.distro.fallback_interface = candidate_nic
-                            LOG.debug("Set fallback NIC: %s.", candidate_nic)
-                            LOG.debug(
-                                "Crawled metadata service%s",
-                                f" {netw.state_msg}" if netw.state_msg else "",
-                            )
-                            break
-                except NoDHCPLeaseError:
-                    LOG.debug(
-                        "Unable to obtain a DHCP lease for %s", candidate_nic
-                    )
+            uhelp.dual_stack(
+                self._try_crawl_with_interface, candidate_nics, timeout=4 * 60
+            )
         else:
             self._crawled_metadata = self.crawl_metadata()
         if not self._crawled_metadata:
@@ -193,6 +175,33 @@ class DataSourceEc2(sources.DataSource):
             .get("document", {})
         )
         return True
+
+    def _try_crawl_with_interface(self, interface, _timeout) -> bool:
+        try:
+            with EphemeralIPNetwork(
+                self.distro,
+                interface,
+                ipv4=True,
+                ipv6=True,
+            ) as netw:
+                self._crawled_metadata = self.crawl_metadata()
+                if self._crawled_metadata:
+                    self.distro.fallback_interface = interface
+                    LOG.debug("Set fallback NIC: %s.", interface)
+                    if netw.state_msg:
+                        LOG.debug(
+                            "Crawled metadata service using nic %s %s",
+                            interface,
+                            netw.state_msg,
+                        )
+                    else:
+                        LOG.debug(
+                            "Crawled metadata service using nic %s", interface
+                        )
+                    return True
+        except NoDHCPLeaseError:
+            LOG.debug("Unable to obtain a DHCP lease for %s", interface)
+        return False
 
     def is_classic_instance(self):
         """Report if this instance type is Ec2 Classic (non-vpc)."""
