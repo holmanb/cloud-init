@@ -33,7 +33,7 @@ class TestTempUtils:
         )
         assert "/fake/return/path" == retval
         assert os.path.abspath(self.prefix) == os.path.abspath(
-            calls.pop(0).get("dir")
+            calls.pop(0).get("dir", "")
         )
 
     def test_mkdtemp_default_non_root_needs_exe(self):
@@ -97,7 +97,7 @@ class TestTempUtils:
         )
         assert "/fake/return/path" == retval
         assert os.path.abspath(self.prefix) == os.path.abspath(
-            calls.pop(0).get("dir")
+            calls.pop(0).get("dir", "")
         )
 
     def test_mkstemp_default_root(self):
