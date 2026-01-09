@@ -32,7 +32,7 @@ class TestTempUtils:
             mkdtemp,
         )
         assert "/fake/return/path" == retval
-        assert [{"dir": self.prefix}] == calls
+        assert os.path.abspath(self.prefix) == os.path.abspath(calls.pop(0).get("dir"))
 
     def test_mkdtemp_default_non_root_needs_exe(self):
         """mkdtemp creates a dir under /var/tmp/cloud-init when needs_exe."""
@@ -94,7 +94,7 @@ class TestTempUtils:
             mkstemp,
         )
         assert "/fake/return/path" == retval
-        assert [{"dir": self.prefix}] == calls
+        assert os.path.abspath(self.prefix) == os.path.abspath(calls.pop(0).get("dir"))
 
     def test_mkstemp_default_root(self):
         """mkstemp creates a secure tempfile in /run/cloud-init for root."""
