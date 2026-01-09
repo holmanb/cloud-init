@@ -6,6 +6,8 @@ concurrency:
   group: 'ci-${{ github.workflow }}-${{ github.ref }}'
   cancel-in-progress: false
 jobs:
+  env:
+    FORCE_COLOR: 1
   hypothesis:
     name: "Fuzz: jsonschema"
     runs-on: ubuntu-latest

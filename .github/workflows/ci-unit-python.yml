@@ -34,4 +34,5 @@ jobs:
       - name: Run unittest
         env: 
           TMPDIR: '/tmp/'
-        run: tox -e ${{ matrix.toxenv }} -- --color=yes
+          FORCE_COLOR=1
+        run: tox -e ${{ matrix.toxenv }}
