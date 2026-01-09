@@ -35,4 +35,6 @@ jobs:
       - name: Install tox
         run: pip install tox
       - name: Run unittest
+        env: 
+          TMPDIR: '/tmp/'
         run: tox -e ${{ matrix.toxenv }} -- --color=yes
