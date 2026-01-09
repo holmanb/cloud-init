@@ -18,13 +18,6 @@ jobs:
         experimental: [false]
         check-latest: [false]
         continue-on-error: [false]
-        include:
-          - python-version: "3.9"
-            toxenv: lowest-supported
-            slug: (lowest-supported)
-            continue-on-error: false
-            check-latest: false
-            experimental: false
     name: Python ${{matrix.python-version}} ${{ matrix.slug }}
     runs-on: macos-latest
     continue-on-error: ${{ matrix.experimental }}
