@@ -201,4 +201,4 @@ def monkeypatch_system_info():
             "variant": "ubuntu",
         }
 
-    util.system_info = my_system_info
+    util.system_info = my_system_info  # type: ignore
