@@ -75,7 +75,7 @@ Configuration Overrides
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 In some circumstances, the Akamai platform may send configurations overrides to
-instances via dmi data to prevent certain behavior that may not be supported,
+instances via dmi data to prevent certain behavior that may not be supported
 based on the instance's region or configuration.  For example, if deploying an
 instance in a region that does not yet support ``instance-data``, both the
 local and init stages will be disabled, preventing cloud-init from attempting
