@@ -2,7 +2,6 @@ import os
 from copy import deepcopy
 from typing import Optional, Sequence, Set
 
-import pytest
 from hypothesis import given, settings
 from hypothesis_jsonschema import from_schema
 
