@@ -50,7 +50,6 @@ def clean_schema(
     return schema
 
 
-@pytest.mark.hypothesis_slow
 class TestSchemaFuzz:
     # Avoid https://github.com/Zac-HD/hypothesis-jsonschema/issues/97
     SCHEMA = clean_schema(
